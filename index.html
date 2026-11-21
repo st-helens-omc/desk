@@ -1,0 +1,1697 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>St Helens OMC — Directors’ Desk</title>
+  <style>
+    :root {
+      --paper: #f4f5f1;
+      --card: #ffffff;
+      --ink: #1e2620;
+      --muted: #5c6a60;
+      --line: #d7ddd0;
+      --accent: #2b6e58;
+      --accent-soft: #e2ede5;
+      --amber: #96631f;
+      --amber-soft: #f3e6d2;
+      --red: #b00020;
+      --red-soft: #fbe4e6;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 24px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    header p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      padding: 7px 13px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.link {
+      border: none;
+      background: none;
+      padding: 4px 0;
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    #board {
+      padding: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .columns {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 760px) {
+      .columns { grid-template-columns: 1fr; }
+      #board { padding: 14px; }
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 16px;
+    }
+    .toolbar select {
+      font: inherit;
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--card);
+      color: var(--ink);
+    }
+    .toolbar .spacer { flex: 1; }
+    .toolbar button.link { font-size: 13px; }
+    .column {
+      background: transparent;
+    }
+    .column h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 10px 2px;
+    }
+    .column .count {
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .cardlist {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 40px;
+    }
+    .empty-hint {
+      color: var(--muted);
+      font-size: 12.5px;
+      padding: 10px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(30,38,32,0.05);
+    }
+    .card.high { border-left: 3px solid var(--red); }
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    .card-head .chev {
+      flex: none;
+      width: 10px;
+      color: var(--muted);
+      font-size: 10px;
+      transition: transform 0.15s;
+    }
+    .card.open .card-head .chev { transform: rotate(90deg); }
+    .card-head h3 {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card.open .card-head h3 { white-space: normal; }
+    .marks { flex: none; display: flex; align-items: center; gap: 4px; }
+    .mark {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 100px;
+      background: #eef0ea;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .mark.due { background: var(--amber-soft); color: var(--amber); }
+    .mark.overdue { background: var(--red-soft); color: var(--red); }
+    .mark.defer { background: #e6ecf5; color: #2f4f7a; }
+    .mark.high { background: var(--red); color: #fff; font-weight: 700; }
+    .card-body { padding: 0 14px 12px 30px; }
+    .card:not(.open) .card-body { display: none; }
+    #later { margin-top: 24px; }
+    #later > summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    #later .later-note { margin: 0 0 10px; }
+    .later-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+    }
+    .radio-row { margin: 6px 0; }
+    .radio-row label { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13.5px; margin: 0; }
+    .field .radio-row input[type=radio], .field label.check input { width: auto; margin: 0; }
+    .field label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13.5px; }
+    .radio-row input[type=date] { margin: 6px 0 0 24px; width: calc(100% - 24px); }
+    .field-label { font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+    .card .desc {
+      color: var(--muted);
+      font-size: 12.5px;
+      margin: 0 0 8px;
+      white-space: pre-wrap;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .tag.due { background: var(--amber-soft); color: var(--amber); }
+    .tag.overdue { background: var(--red-soft); color: var(--red); }
+    .tag.assignee { background: #eef0ea; color: var(--ink); }
+    .tag.defer { background: #e6ecf5; color: #2f4f7a; }
+    .tag.high { background: var(--red-soft); color: var(--red); }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .actions button { font-size: 12.5px; padding: 5px 10px; }
+    .minor-actions { display: flex; justify-content: flex-end; gap: 16px; margin-top: 8px; }
+    .minor-actions button.link { font-size: 12.5px; padding: 2px 0; text-decoration: none; }
+    .minor-actions button.link:hover { text-decoration: underline; }
+    .minor-actions button.link.delete { color: #b00020; }
+    button.danger { background: #b00020; border-color: #b00020; color: #fff; }
+    .field .other { margin-top: 6px; }
+    #signin { max-width: 420px; margin: 48px auto; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+    #signin h2 { margin-top: 0; font-size: 18px; }
+    #signin p { line-height: 1.5; }
+    #signin select, #signin input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px; font: inherit; margin: 6px 0 14px; }
+    #signin input#signin-code { font-size: 22px; letter-spacing: 6px; text-align: center; }
+    .muted { color: var(--muted); font-size: 13px; }
+    header .who button.link { font-size: 13px; padding: 0; margin-left: 6px; }
+    header .digest-pref { font-size: 13px; margin-left: 6px; white-space: nowrap; }
+    header .digest-pref select { font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+    details.history { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+    details.history summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+    .hist-list { list-style: none; margin: 8px 0; padding: 0; max-height: 260px; overflow: auto; }
+    .hist-list li { font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+    .hist-list li:last-child { border-bottom: 0; }
+    .hist-meta { color: var(--muted); font-size: 11.5px; }
+    .hist-list li.note .hist-text { white-space: pre-wrap; }
+    .hist-list li.event .hist-text { color: var(--muted); font-style: italic; }
+    .note-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; font: inherit; font-size: 12.5px; min-height: 48px; resize: vertical; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(20,20,19,0.4);
+      display: none;
+      align-items: center; justify-content: center;
+      padding: 16px;
+      z-index: 10;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 420px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+    .modal h2 { margin-top: 0; font-size: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      font: inherit;
+    }
+    .field textarea { resize: vertical; min-height: 60px; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    #status-msg {
+      position: fixed;
+      bottom: 16px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--ink);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 12.5px;
+      display: none;
+      z-index: 20;
+    }
+    #status-msg.working::before {
+      content: "";
+      display: inline-block;
+      width: 10px; height: 10px;
+      margin-right: 8px;
+      vertical-align: -1px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    body.busy, body.busy button { cursor: progress; }
+    button:disabled { opacity: 0.55; cursor: progress; }
+    .card.saving { opacity: 0.65; }
+    /* Tasks / Messages switch */
+    .views { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+    .views button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--muted); font-weight: 600; }
+    .views button.on { color: var(--ink); border-bottom-color: var(--accent); }
+    .views .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: #b00020; color: #fff; font-size: 11.5px; line-height: 18px; text-align: center; }
+    /* Messages */
+    #messages { padding: 20px; max-width: 760px; }
+    #messages h2 { font-size: 15px; margin: 22px 0 8px; }
+    #messages h2:first-child { margin-top: 0; }
+    .msg-intro { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 6px; }
+    .msg { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .msg.mine-to-act { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .msg h3 { font-size: 15px; margin: 0 0 4px; }
+    .msg .meta { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+    .msg .status { font-weight: 600; color: var(--ink); }
+    .msg .body { font-size: 14px; line-height: 1.5; max-height: 7.5em; overflow: hidden; position: relative; }
+    .msg.expanded .body { max-height: none; }
+    .msg .more { font-size: 12.5px; }
+    .msg .comment { background: #fff4e5; border-radius: 6px; padding: 6px 9px; font-size: 13px; margin: 8px 0; }
+    .msg .queued-note { background: var(--accent-soft); border-radius: 6px; padding: 6px 9px; font-size: 13px; margin: 8px 0; }
+    .msg-empty { color: var(--muted); font-size: 13px; }
+    .rt-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .rt-bar button { min-width: 34px; padding: 5px 9px; font-size: 14px; }
+    .rt-link { display: none; gap: 6px; margin-bottom: 6px; }
+    .rt-link.open { display: flex; }
+    .rt-link input { flex: 1; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; font: inherit; }
+    .rt-editor { min-height: 180px; max-height: 50vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font-size: 14px; line-height: 1.5; background: #fff; }
+    .rt-editor:empty:before { content: attr(data-placeholder); color: var(--muted); }
+    .rt-editor:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .rt-editor p, .msg .body p { margin: 0 0 .7em; }
+    .rt-editor ul, .rt-editor ol, .msg .body ul, .msg .body ol { margin: 0 0 .7em; padding-left: 1.4em; }
+    .rt-editor h3, .msg .body h3 { font-size: 15px; margin: 0 0 .5em; }
+    .rt-editor a, .msg .body a { color: var(--accent); text-decoration: underline; }
+    .preview { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.5; background: #fafbf8; }
+    .preview p { margin: 0 0 .7em; }
+    .preview ul, .preview ol { margin: 0 0 .7em; padding-left: 1.4em; }
+    .preview h3 { font-size: 15px; margin: 0 0 .5em; }
+    .preview a { color: var(--accent); text-decoration: underline; }
+    .preview .sig { color: var(--muted); margin: 0; }
+    .modal.wide { max-width: 600px; }
+    .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+    @media (prefers-reduced-motion: reduce) {
+      #status-msg.working::before { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>St Helens OMC — Directors’ Desk</h1>
+      <p class="who" id="who" hidden>Hello, <span id="who-name"></span>
+        <button class="link" onclick="doSignOut()">Not you? Sign out</button>
+        <span class="digest-pref">· Email digest:
+          <select id="my-digest" onchange="saveDigest()" aria-label="How often you get the task digest email">
+            <option>Weekly</option><option>Fortnightly</option><option>Monthly</option><option>Off</option>
+          </select>
+          <span class="muted" id="digest-msg" role="status"></span></span></p>
+    </div>
+    <button class="primary" id="add-btn" onclick="openAddModal()" hidden>+ Add task</button>
+    <button class="primary" id="new-msg-btn" onclick="openComposeModal()" hidden>+ New message</button>
+  </header>
+  <nav class="views" id="views" hidden>
+    <button id="view-tasks" class="on" onclick="showView('tasks')">Tasks</button>
+    <button id="view-messages" onclick="showView('messages')">Messages <span class="badge" id="msg-badge" hidden></span></button>
+  </nav>
+
+  <!-- Sign-in screen (shown when this browser isn't signed in yet) -->
+  <div id="signin" hidden>
+    <div id="signin-pick">
+      <h2>Who are you?</h2>
+      <p>Choose your name. We’ll email you a 6-digit code to type in here. You only need to do this once on each phone or computer.</p>
+      <select id="signin-name"><option value="">Loading…</option></select>
+      <button class="primary" id="signin-btn" onclick="doRequestSignIn()">Email me a code</button>
+    </div>
+    <div id="signin-sent" hidden>
+      <h2>Check your email</h2>
+      <p>We’ve sent a 6-digit code to <b id="signin-to"></b>. Type it in below. It works for 30 minutes.</p>
+      <input id="signin-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" onkeydown="if (event.key === 'Enter') doCompleteSignIn()">
+      <button class="primary" id="signin-code-btn" onclick="doCompleteSignIn()">Sign in</button>
+      <p class="muted">No email after a few minutes? Check your junk or spam folder, or <button class="link" onclick="showPick()">start again</button>.</p>
+    </div>
+    <div id="signin-wait" hidden>
+      <h2>Signing you in…</h2>
+    </div>
+  </div>
+
+  <div id="board" hidden>
+    <div class="toolbar">
+      <select id="flt-who" onchange="setFilter()" aria-label="Whose tasks">
+        <option value="all">Everyone’s tasks</option>
+        <option value="mine">My tasks</option>
+      </select>
+      <select id="flt-cat" onchange="setFilter()" aria-label="Category">
+        <option value="">All categories</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="link" onclick="setAllOpen(true)">Expand all</button>
+      <button class="link" onclick="setAllOpen(false)">Collapse all</button>
+    </div>
+    <div class="columns">
+      <div class="column">
+        <h2>Open <span class="count" id="count-open"></span></h2>
+        <div class="cardlist" id="list-open"></div>
+      </div>
+      <div class="column">
+        <h2>In Progress <span class="count" id="count-progress"></span></h2>
+        <div class="cardlist" id="list-progress"></div>
+      </div>
+      <div class="column">
+        <h2>Done <span class="count" id="count-done"></span></h2>
+        <div class="cardlist" id="list-done"></div>
+      </div>
+    </div>
+    <details id="later">
+      <summary>Later <span class="count" id="count-later"></span></summary>
+      <p class="muted later-note">Parked tasks. A task with a date comes back to the board by itself on that date. “Someday” tasks stay here until someone brings them back.</p>
+      <div class="later-list" id="list-later"></div>
+    </details>
+  </div>
+
+  <!-- Add task modal -->
+  <div class="modal-backdrop" id="add-modal">
+    <div class="modal">
+      <h2>Add a task</h2>
+      <div class="field">
+        <label for="f-title">Title</label>
+        <input id="f-title" type="text" maxlength="120">
+      </div>
+      <div class="field">
+        <label for="f-desc">Details (optional)</label>
+        <textarea id="f-desc" maxlength="500"></textarea>
+      </div>
+      <div class="field">
+        <label for="f-category">Category</label>
+        <select id="f-category" onchange="toggleOther('f-category', 'f-category-new')"></select>
+        <input id="f-category-new" class="other" type="text" maxlength="40" placeholder="Type the new category" hidden>
+      </div>
+      <div class="field">
+        <label for="f-due">Due date (optional)</label>
+        <input id="f-due" type="date">
+      </div>
+      <div class="field">
+        <label class="check"><input id="f-high" type="checkbox"> High priority</label>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeAddModal()">Cancel</button>
+        <button class="primary" onclick="submitAddTask()">Add task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit task modal -->
+  <div class="modal-backdrop" id="edit-modal">
+    <div class="modal">
+      <h2>Edit task</h2>
+      <div class="field">
+        <label for="e-title">Title</label>
+        <input id="e-title" type="text" maxlength="120">
+      </div>
+      <div class="field">
+        <label for="e-desc">Details (optional)</label>
+        <textarea id="e-desc" maxlength="500"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeEditModal()">Cancel</button>
+        <button class="primary" onclick="submitEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assign task modal -->
+  <div class="modal-backdrop" id="assign-modal">
+    <div class="modal">
+      <h2>Assign task</h2>
+      <div class="field">
+        <label for="f-assignee">Who should do this?</label>
+        <select id="f-assignee" onchange="toggleOther('f-assignee', 'f-assignee-new')"></select>
+        <input id="f-assignee-new" class="other" type="text" maxlength="80" placeholder="Their name, e.g. the managing agent" hidden>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeAssignModal()">Cancel</button>
+        <button class="primary" onclick="submitAssign()">Assign</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dates modal: due date and deferral -->
+  <div class="modal-backdrop" id="dates-modal">
+    <div class="modal">
+      <h2>Dates</h2>
+      <p id="dates-title" style="font-weight:600;margin-top:-6px"></p>
+      <div class="field">
+        <label for="d-due">Due date</label>
+        <input id="d-due" type="date">
+        <button class="link" type="button" onclick="document.getElementById('d-due').value = ''">Clear due date</button>
+      </div>
+      <div class="field">
+        <div class="field-label">Park it in Later?</div>
+        <div class="radio-row"><label><input type="radio" name="d-defer" value="" onchange="syncDeferInput()"> No, keep it on the board</label></div>
+        <div class="radio-row"><label><input type="radio" name="d-defer" value="date" onchange="syncDeferInput()"> Yes, bring it back on…</label>
+          <input id="d-defer-date" type="date" hidden></div>
+        <div class="radio-row"><label><input type="radio" name="d-defer" value="someday" onchange="syncDeferInput()"> Yes, someday (no date)</label></div>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeDatesModal()">Cancel</button>
+        <button class="primary" onclick="submitDates()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirmation -->
+  <div class="modal-backdrop" id="delete-modal">
+    <div class="modal">
+      <h2>Delete this task?</h2>
+      <p id="delete-title" style="font-weight:600"></p>
+      <p style="color:var(--muted);font-size:13px">It will disappear from the board for everyone.</p>
+      <div class="modal-actions">
+        <button onclick="closeDeleteModal()">No, keep it</button>
+        <button class="primary danger" onclick="submitDelete()">Yes, delete it</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="messages" hidden>
+    <p class="msg-intro">Messages to the residents' groups go out from the St Helens admin account as <b>The Directors, St Helens OMC</b>, and replies come back to all the directors. Announcements and Owners need another director's approval. Every message waits a few minutes after it's released, so anyone can still cancel it, and the directors get a copy.</p>
+    <div id="msg-lists"><p class="msg-empty">Loading…</p></div>
+  </div>
+
+  <!-- Compose / edit a message -->
+  <div class="modal-backdrop" id="compose-modal">
+    <div class="modal wide">
+      <h2 id="compose-title">New message</h2>
+      <div class="field">
+        <label for="m-group">Send to</label>
+        <select id="m-group" onchange="syncComposeHint()"></select>
+        <div class="hint" id="m-group-hint"></div>
+      </div>
+      <div class="field">
+        <label for="m-subject">Subject</label>
+        <input id="m-subject" type="text" maxlength="150">
+      </div>
+      <div class="field">
+        <label for="m-body">Message</label>
+        <div class="rt-bar" id="rt-bar">
+          <button type="button" data-rt="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button type="button" data-rt="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button type="button" data-rt="heading" title="Heading">Heading</button>
+          <button type="button" data-rt="ul" title="Bulleted list">• List</button>
+          <button type="button" data-rt="ol" title="Numbered list">1. List</button>
+          <button type="button" data-rt="link" title="Add a link to the selected text">Link</button>
+          <button type="button" data-rt="clear" title="Remove formatting from the selection">Clear</button>
+        </div>
+        <div class="rt-link" id="rt-link">
+          <input id="rt-url" type="text" placeholder="Paste the web address, e.g. https://…" aria-label="Link address">
+          <button type="button" class="primary" id="rt-link-ok">Add link</button>
+          <button type="button" id="rt-link-cancel">Cancel</button>
+        </div>
+        <div class="rt-editor" id="m-body" contenteditable="true" data-placeholder="Write your message here…"></div>
+        <div class="hint">To add a link, select some text, press Link and paste the address.</div>
+      </div>
+      <div class="field">
+        <label>How it will look</label>
+        <div class="preview" id="m-preview"></div>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeComposeModal()">Cancel</button>
+        <button onclick="saveCompose(false)">Save draft</button>
+        <button class="primary" id="m-send-btn" onclick="saveCompose(true)">Save and send…</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirmation -->
+  <div class="modal-backdrop" id="confirm-modal">
+    <div class="modal">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-text" style="line-height:1.5"></p>
+      <div class="modal-actions">
+        <button onclick="closeConfirm()">Not now</button>
+        <button class="primary" id="confirm-ok"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send back with a comment -->
+  <div class="modal-backdrop" id="return-modal">
+    <div class="modal">
+      <h2>Send back for changes</h2>
+      <div class="field">
+        <label for="r-comment">What should change? (the author sees this)</label>
+        <textarea id="r-comment" maxlength="1000"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeReturnModal()">Cancel</button>
+        <button class="primary" onclick="submitReturn()">Send back</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-msg"></div>
+
+  <script>
+    // ---- desk.st-helens.ie: stand-in for google.script.run ----
+    // The page runs outside Apps Script here, so each server call is POSTed to the
+    // Apps Script web app as {fn, args}. text/plain keeps it a "simple" request (no CORS preflight).
+    (function () {
+      var API_URL = 'https://script.google.com/macros/s/AKfycbxMpG8lZSKSCUqW5OI-xt_-fuBHQB5WxW7gLrPqw2RhLGX5jVYYXwgRJmpaX4ClTPdPqg/exec';
+      function runner(ok, fail) {
+        return new Proxy({}, {
+          get: function (_, name) {
+            if (name === 'withSuccessHandler') return function (f) { return runner(f, fail); };
+            if (name === 'withFailureHandler') return function (f) { return runner(ok, f); };
+            return function () {
+              var args = Array.prototype.slice.call(arguments);
+              fetch(API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                               body: JSON.stringify({ fn: name, args: args }) })
+                .then(function (r) { if (!r.ok) throw new Error('The Desk couldn’t be reached (' + r.status + '). Try again.'); return r.json(); })
+                .then(function (res) {
+                  if (res && res.ok) { if (ok) ok(res.result); }
+                  else if (fail) fail(new Error((res && res.error) || 'Something went wrong.'));
+                })
+                .catch(function (err) {
+                  if (fail) fail(err && err.message ? err : new Error('The Desk couldn’t be reached. Check your connection and try again.'));
+                });
+            };
+          }
+        });
+      }
+      window.google = { script: {
+        run: runner(null, null),
+        history: { replace: function () { try { history.replaceState(null, '', location.pathname); } catch (e) {} } }
+      } };
+    })();
+  </script>
+  <script>
+    var SIGNIN_TOKEN = (new URLSearchParams(location.search).get('signin') || '').replace(/[^a-f0-9]/g, '');
+    var OPEN_ADD = new URLSearchParams(location.search).get('action') === 'add';  // arrived via the "Add a new task" link
+    var OPEN_VIEW = (new URLSearchParams(location.search).get('view') || '').replace(/[^a-z]/g, '');  // ?view=messages
+    var STORE = 'stHelensBoardKey';
+    var KEY = '';
+    var directors = [];
+    var assignTaskId = null;
+    var deleteTaskId = null;
+    var lastTasks = [];
+    var openHistory = {};  // task ids whose history panel is open, kept open across refreshes
+    var DEFAULT_CATEGORIES = ['Maintenance', 'Admin', 'Events', 'Finance', 'Compliance', 'Other'];
+    var OTHER = '__other__';
+    var busy = false;
+    var MY_NAME = '';
+    var datesTaskId = null;
+    var showAllDone = false;
+    var DONE_DAYS = 30;
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Per-device memory: which cards are open, and the filters.
+    function readStore(name, fallback) {
+      try { var v = localStorage.getItem(name); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+    }
+    function writeStore(name, value) {
+      try { localStorage.setItem(name, JSON.stringify(value)); } catch (e) {}
+    }
+    var openCards = readStore('stHelensOpenCards', {});
+    var filters = readStore('stHelensFilters', { who: 'all', cat: '' });
+
+    function showStatus(text, working) {
+      var el = document.getElementById('status-msg');
+      el.textContent = text;
+      el.className = working ? 'working' : '';
+      el.style.display = 'block';
+      clearTimeout(showStatus._t);
+      if (!working) showStatus._t = setTimeout(function () { el.style.display = 'none'; }, 3000);
+    }
+
+    function setBusy(on) {
+      busy = on;
+      document.body.classList.toggle('busy', on);
+      var buttons = document.querySelectorAll('.actions button, .minor-actions button, .modal-actions button.primary, header button');
+      for (var i = 0; i < buttons.length; i++) buttons[i].disabled = on;
+    }
+
+    // Runs one server call with immediate feedback: the clicked button changes to
+    // `working` text, its card dims, every other action is disabled, and a
+    // spinner message stays up until the Sheet has been updated.
+    function call(fnName, args, opts) {
+      if (busy) return;
+      var btn = opts.button || null;
+      var card = btn && btn.closest ? btn.closest('.card') : null;
+      setBusy(true);
+      if (btn) btn.textContent = opts.working;
+      if (card) card.classList.add('saving');
+      showStatus(opts.working, true);
+      var runner = google.script.run
+        .withSuccessHandler(function (result) {
+          setBusy(false);
+          if (opts.onSuccess) opts.onSuccess(result);
+          showStatus(opts.done);
+        })
+        .withFailureHandler(function (err) {
+          setBusy(false);
+          if (card) card.classList.remove('saving');
+          if (btn && opts.label) btn.textContent = opts.label;
+          showStatus('Not saved: ' + (err && err.message ? err.message : 'something went wrong. Try again.'));
+        });
+      runner[fnName].apply(runner, [KEY].concat(args));
+    }
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function todayIso() {
+      var d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    function daysAgoIso(n) {
+      var d = new Date(Date.now() - n * 864e5);
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    function fmtDay(iso) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+      if (!m) return String(iso || '');
+      var s = Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1];
+      return Number(m[1]) === new Date().getFullYear() ? s : s + ' ' + m[1];
+    }
+    function isOverdue(task) {
+      if (!task.dueDate || task.status === 'Done') return false;
+      return task.dueDate < todayIso();
+    }
+    function isDeferred(t) {
+      if (t.status === 'Done' || !t.deferUntil) return false;
+      return t.deferUntil === 'Someday' || t.deferUntil > todayIso();
+    }
+    function isHigh(t) { return t.priority === 'High'; }
+    function initials(name) {
+      return String(name || '').split(/\s+/).filter(Boolean).map(function (w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
+    }
+    function byPriorityThenDate(a, b) {
+      var ha = isHigh(a) ? 0 : 1, hb = isHigh(b) ? 0 : 1;
+      if (ha !== hb) return ha - hb;
+      var da = a.dueDate || '9999', db = b.dueDate || '9999';
+      if (da !== db) return da < db ? -1 : 1;
+      return String(a.createdDate) < String(b.createdDate) ? -1 : 1;
+    }
+    function findTask(id) { return lastTasks.filter(function (x) { return x.id === id; })[0]; }
+
+    function loadDirectors() {
+      google.script.run
+        .withSuccessHandler(function (list) { directors = list || []; })
+        .withFailureHandler(function (err) { console.error(err); })
+        .getDirectors(KEY);
+    }
+
+    function loadTasks() {
+      ['list-open', 'list-progress', 'list-done', 'list-later'].forEach(function (id) {
+        document.getElementById(id).innerHTML = '<div class="empty-hint">Loading…</div>';
+      });
+      google.script.run
+        .withSuccessHandler(renderBoard)
+        .withFailureHandler(function (err) { showStatus('Couldn\'t load the tasks: ' + err.message); })
+        .getTasks(KEY);
+    }
+
+    function passesFilter(t) {
+      if (filters.who === 'mine' && String(t.assigneeName || '') !== MY_NAME) return false;
+      if (filters.cat && String(t.category || '') !== filters.cat) return false;
+      return true;
+    }
+
+    function refreshCategoryFilter() {
+      var sel = document.getElementById('flt-cat');
+      var cats = DEFAULT_CATEGORIES.slice();
+      lastTasks.forEach(function (t) {
+        var c = String(t.category || '').trim();
+        if (c && cats.indexOf(c) === -1) cats.push(c);
+      });
+      if (filters.cat && cats.indexOf(filters.cat) === -1) cats.push(filters.cat);
+      sel.innerHTML = '<option value="">All categories</option>' + cats.map(function (c) {
+        return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+      }).join('');
+      sel.value = filters.cat || '';
+      document.getElementById('flt-who').value = filters.who || 'all';
+    }
+
+    function setFilter() {
+      filters = { who: document.getElementById('flt-who').value, cat: document.getElementById('flt-cat').value };
+      writeStore('stHelensFilters', filters);
+      renderBoard(lastTasks);
+    }
+
+    function setAllOpen(on) {
+      lastTasks.forEach(function (t) { if (on) openCards[t.id] = true; else delete openCards[t.id]; });
+      writeStore('stHelensOpenCards', openCards);
+      renderBoard(lastTasks);
+    }
+
+    function renderBoard(tasks) {
+      lastTasks = tasks || [];
+      refreshCategoryFilter();
+      var shown = lastTasks.filter(passesFilter);
+      var later = shown.filter(isDeferred);
+      var active = shown.filter(function (t) { return !isDeferred(t); });
+      var open = active.filter(function (t) { return t.status === 'Open'; }).sort(byPriorityThenDate);
+      var progress = active.filter(function (t) { return t.status === 'In Progress'; }).sort(byPriorityThenDate);
+      var done = active.filter(function (t) { return t.status === 'Done'; }).sort(function (a, b) {
+        return String(a.completedDate) > String(b.completedDate) ? -1 : 1;  // newest first
+      });
+      var cutoff = daysAgoIso(DONE_DAYS);
+      var recentDone = done.filter(function (t) { return !t.completedDate || t.completedDate >= cutoff; });
+      var olderDone = done.length - recentDone.length;
+      later.sort(function (a, b) {
+        var da = a.deferUntil === 'Someday' ? '9999' : a.deferUntil;
+        var db = b.deferUntil === 'Someday' ? '9999' : b.deferUntil;
+        if (da !== db) return da < db ? -1 : 1;
+        return byPriorityThenDate(a, b);
+      });
+
+      document.getElementById('count-open').textContent = '(' + open.length + ')';
+      document.getElementById('count-progress').textContent = '(' + progress.length + ')';
+      document.getElementById('count-done').textContent = '(' + done.length + ')';
+      document.getElementById('count-later').textContent = '(' + later.length + ')';
+
+      renderColumn('list-open', open, 'open');
+      renderColumn('list-progress', progress, 'progress');
+      renderColumn('list-done', showAllDone ? done : recentDone, 'done');
+      if (olderDone) {
+        document.getElementById('list-done').insertAdjacentHTML('beforeend',
+          '<button class="link" data-action="moredone">' +
+          (showAllDone ? 'Hide tasks done over ' + DONE_DAYS + ' days ago' :
+            'Show ' + olderDone + ' done over ' + DONE_DAYS + ' days ago') + '</button>');
+      }
+      renderColumn('list-later', later, 'later');
+    }
+
+    function renderColumn(elId, tasks, kind) {
+      var el = document.getElementById(elId);
+      if (!tasks.length) {
+        el.innerHTML = '<div class="empty-hint">Nothing here.</div>';
+        return;
+      }
+      el.innerHTML = tasks.map(function (t) { return cardHtml(t, kind); }).join('');
+    }
+
+    function btnHtml(action, id, label) {
+      return '<button data-action="' + action + '" data-id="' + escapeHtml(id) + '">' + label + '</button>';
+    }
+
+    function cardHtml(t, kind) {
+      var high = isHigh(t);
+      var over = isOverdue(t);
+
+      // One-line view: title plus small markers.
+      var marks = '';
+      if (high) marks += '<span class="mark high" title="High priority">!</span>';
+      if (kind === 'later') {
+        marks += '<span class="mark defer" title="Comes back on this date">' +
+          (t.deferUntil === 'Someday' ? 'Someday' : '↻ ' + escapeHtml(fmtDay(t.deferUntil))) + '</span>';
+      }
+      if (t.dueDate && kind !== 'done') {
+        marks += '<span class="mark ' + (over ? 'overdue' : 'due') + '" title="' + (over ? 'Overdue' : 'Due') + '">' +
+          escapeHtml(fmtDay(t.dueDate)) + '</span>';
+      }
+      if (t.assigneeName) {
+        marks += '<span class="mark" title="' + escapeHtml(t.assigneeName) + '">' + escapeHtml(initials(t.assigneeName)) + '</span>';
+      }
+
+      // Full view.
+      var tags = '';
+      if (high) tags += '<span class="tag high">High priority</span>';
+      if (t.category) tags += '<span class="tag">' + escapeHtml(t.category) + '</span>';
+      if (t.dueDate) {
+        tags += '<span class="tag ' + (over ? 'overdue' : 'due') + '">' +
+          (over ? 'Overdue: ' : 'Due ') + escapeHtml(fmtDay(t.dueDate)) + '</span>';
+      }
+      if (kind === 'later') {
+        tags += '<span class="tag defer">' + (t.deferUntil === 'Someday' ? 'In Later: someday' :
+          'Back on ' + escapeHtml(fmtDay(t.deferUntil))) + '</span>';
+      }
+      if (t.assigneeName) {
+        tags += '<span class="tag assignee">' + escapeHtml(t.assigneeName) + '</span>';
+      }
+      if (kind === 'done' && t.completedDate) {
+        tags += '<span class="tag assignee">Done ' + escapeHtml(fmtDay(t.completedDate)) + '</span>';
+      }
+
+      var prio = btnHtml('priority', t.id, high ? 'Normal priority' : 'High priority');
+      var actions = '';
+      if (kind === 'open') {
+        actions = btnHtml('claim', t.id, 'Volunteer for this') + btnHtml('assign', t.id, 'Assign to…') +
+          btnHtml('dates', t.id, 'Dates / later…') + prio;
+      } else if (kind === 'progress') {
+        actions = btnHtml('done', t.id, 'Mark done') + btnHtml('assign', t.id, 'Reassign…') + btnHtml('reopen', t.id, 'Reopen') +
+          btnHtml('dates', t.id, 'Dates / later…') + prio;
+      } else if (kind === 'done') {
+        actions = btnHtml('reopen', t.id, 'Reopen');
+      } else if (kind === 'later') {
+        actions = btnHtml('bringback', t.id, 'Bring back now') + btnHtml('dates', t.id, 'Dates / later…') + prio;
+      }
+
+      var minor = '<button class="link" data-action="edit" data-id="' + escapeHtml(t.id) + '">Edit title or details</button>' +
+        '<button class="link delete" data-action="delete" data-id="' + escapeHtml(t.id) + '">Delete task</button>';
+
+      var isOpen = !!openCards[t.id];
+      return (
+        '<div class="card' + (isOpen ? ' open' : '') + (high ? ' high' : '') + '" data-id="' + escapeHtml(t.id) + '">' +
+          '<div class="card-head" role="button" tabindex="0" aria-expanded="' + isOpen + '">' +
+            '<span class="chev">▶</span><h3>' + escapeHtml(t.title) + '</h3>' +
+            '<span class="marks">' + marks + '</span>' +
+          '</div>' +
+          '<div class="card-body">' +
+            (t.description ? '<p class="desc">' + escapeHtml(t.description) + '</p>' : '') +
+            '<div class="tags">' + tags + '</div>' +
+            '<div class="actions">' + actions + '</div>' +
+            '<div class="minor-actions">' + minor + '</div>' +
+            historyHtml(t) +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function toggleCard(head) {
+      var card = head.closest('.card');
+      var id = card.getAttribute('data-id');
+      var on = !card.classList.contains('open');
+      card.classList.toggle('open', on);
+      head.setAttribute('aria-expanded', on);
+      if (on) openCards[id] = true; else delete openCards[id];
+      writeStore('stHelensOpenCards', openCards);
+    }
+
+    function historyHtml(t) {
+      var h = t.history || [];
+      var notes = h.filter(function (e) { return e.type === 'note'; }).length;
+      var label = 'Notes & history' + (notes ? ' (' + notes + ' note' + (notes === 1 ? '' : 's') + ')' : '');
+      var items = h.map(function (e) {
+        return '<li class="' + (e.type === 'note' ? 'note' : 'event') + '">' +
+          '<div class="hist-text">' + escapeHtml(e.text) + '</div>' +
+          '<div class="hist-meta">' + escapeHtml(e.who) + (e.who ? ' · ' : '') + escapeHtml(e.when) + '</div></li>';
+      }).join('');
+      return '<details class="history" data-id="' + escapeHtml(t.id) + '"' + (openHistory[t.id] ? ' open' : '') + '>' +
+        '<summary>' + label + '</summary>' +
+        '<textarea class="note-input" maxlength="2000" placeholder="Add a note…"></textarea>' +
+        '<div class="actions">' + btnHtml('note', t.id, 'Add note') + '</div>' +
+        '<ul class="hist-list">' + items + '</ul>' +
+      '</details>';
+    }
+
+    // Remember which history panels are open so a refresh doesn't close them.
+    document.getElementById('board').addEventListener('toggle', function (ev) {
+      var d = ev.target;
+      if (!d.classList || !d.classList.contains('history')) return;
+      var id = d.getAttribute('data-id');
+      if (d.open) openHistory[id] = true; else delete openHistory[id];
+    }, true);
+
+    document.getElementById('board').addEventListener('keydown', function (ev) {
+      var head = ev.target.closest && ev.target.closest('.card-head');
+      if (head && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); toggleCard(head); }
+    });
+
+    document.getElementById('board').addEventListener('click', function (ev) {
+      var head = ev.target.closest('.card-head');
+      if (head) { toggleCard(head); return; }
+      var b = ev.target.closest('button[data-action]');
+      if (!b || busy) return;
+      var id = b.getAttribute('data-id');
+      var action = b.getAttribute('data-action');
+      var label = b.textContent;
+      if (action === 'claim') {
+        call('claimTask', [id], { button: b, label: label, working: 'Volunteering…', done: 'You volunteered for this task.', onSuccess: renderBoard });
+      } else if (action === 'assign') {
+        openAssignModal(id);
+      } else if (action === 'done') {
+        call('updateStatus', [id, 'Done'], { button: b, label: label, working: 'Marking done…', done: 'Marked done.', onSuccess: renderBoard });
+      } else if (action === 'reopen') {
+        call('updateStatus', [id, 'Open'], { button: b, label: label, working: 'Reopening…', done: 'Reopened.', onSuccess: renderBoard });
+      } else if (action === 'delete') {
+        openDeleteModal(id);
+      } else if (action === 'dates') {
+        openDatesModal(id);
+      } else if (action === 'edit') {
+        openEditModal(id);
+      } else if (action === 'bringback') {
+        call('setDates', [id, { defer: '' }], { button: b, label: label, working: 'Bringing back…', done: 'Back on the board.', onSuccess: renderBoard });
+      } else if (action === 'priority') {
+        var t = findTask(id);
+        var makeHigh = !(t && isHigh(t));
+        call('setPriority', [id, makeHigh], { button: b, label: label, working: 'Saving…',
+          done: makeHigh ? 'Marked high priority.' : 'Priority set to normal.', onSuccess: renderBoard });
+      } else if (action === 'moredone') {
+        showAllDone = !showAllDone;
+        renderBoard(lastTasks);
+      } else if (action === 'note') {
+        var box = b.closest('details').querySelector('.note-input');
+        var text = box.value.trim();
+        if (!text) { showStatus('Type a note first.'); box.focus(); return; }
+        call('addNote', [id, text], { button: b, label: label, working: 'Saving note…', done: 'Note added.', onSuccess: renderBoard });
+      }
+    });
+
+    // ---- Add task ----
+
+    function openAddModal() {
+      document.getElementById('f-title').value = '';
+      document.getElementById('f-desc').value = '';
+      var cats = DEFAULT_CATEGORIES.slice();
+      lastTasks.forEach(function (t) {
+        var c = String(t.category || '').trim();
+        if (c && cats.indexOf(c) === -1) cats.push(c);
+      });
+      fillSelect('f-category', [{ value: '', label: '—' }].concat(cats.map(function (c) { return { value: c, label: c }; })),
+        '+ New category…');
+      toggleOther('f-category', 'f-category-new');
+      document.getElementById('f-due').value = '';
+      document.getElementById('f-high').checked = false;
+      document.getElementById('add-modal').classList.add('open');
+    }
+    function closeAddModal() {
+      document.getElementById('add-modal').classList.remove('open');
+    }
+    function submitAddTask() {
+      var title = document.getElementById('f-title').value.trim();
+      if (!title) { showStatus('Title is required.'); return; }
+      if (document.getElementById('f-category').value === OTHER && !pickedValue('f-category', 'f-category-new')) {
+        showStatus('Type the new category, or pick one from the list.'); return;
+      }
+      var input = {
+        title: title,
+        description: document.getElementById('f-desc').value.trim(),
+        category: pickedValue('f-category', 'f-category-new'),
+        dueDate: document.getElementById('f-due').value,
+        high: document.getElementById('f-high').checked
+      };
+      var btn = document.querySelector('#add-modal button.primary');
+      call('createTask', [input], {
+        button: btn, label: 'Add task', working: 'Adding…', done: 'Task added.',
+        onSuccess: function (tasks) { btn.textContent = 'Add task'; renderBoard(tasks); closeAddModal(); }
+      });
+    }
+
+    // ---- Assign ----
+
+    function openAssignModal(taskId) {
+      assignTaskId = taskId;
+      var opts = directors.map(function (d) { return { value: d.email, label: d.name }; });
+      // People who aren't directors but have had tasks before (e.g. the agent)
+      var seen = {};
+      directors.forEach(function (d) { seen[d.name.toLowerCase()] = true; });
+      lastTasks.forEach(function (t) {
+        var n = String(t.assigneeName || '').trim();
+        if (n && !t.assigneeEmail && !seen[n.toLowerCase()]) {
+          seen[n.toLowerCase()] = true;
+          opts.push({ value: 'name:' + n, label: n });
+        }
+      });
+      fillSelect('f-assignee', opts, '+ Someone else…');
+      var current = lastTasks.filter(function (x) { return x.id === taskId; })[0];
+      document.querySelector('#assign-modal h2').textContent =
+        current && current.assigneeName ? 'Reassign task (now: ' + current.assigneeName + ')' : 'Assign task';
+      toggleOther('f-assignee', 'f-assignee-new');
+      document.getElementById('assign-modal').classList.add('open');
+    }
+    function closeAssignModal() {
+      document.getElementById('assign-modal').classList.remove('open');
+      assignTaskId = null;
+    }
+    function submitAssign() {
+      var v = document.getElementById('f-assignee').value;
+      var assignee;
+      if (v === OTHER) {
+        var n = document.getElementById('f-assignee-new').value.trim();
+        if (!n) { showStatus('Type the person\'s name.'); return; }
+        assignee = { name: n };
+      } else if (v.indexOf('name:') === 0) {
+        assignee = { name: v.slice(5) };
+      } else {
+        assignee = v;
+      }
+      if (!assignTaskId || !assignee) return;
+      var btn = document.querySelector('#assign-modal button.primary');
+      call('assignTask', [assignTaskId, assignee], {
+        button: btn, label: 'Assign', working: 'Assigning…', done: 'Task assigned.',
+        onSuccess: function (tasks) { btn.textContent = 'Assign'; renderBoard(tasks); closeAssignModal(); }
+      });
+    }
+
+    // ---- Views: Tasks / Messages ----
+
+    var currentView = 'tasks';
+    function showView(v) {
+      currentView = v;
+      document.getElementById('board').hidden = v !== 'tasks';
+      document.getElementById('messages').hidden = v !== 'messages';
+      document.getElementById('add-btn').hidden = v !== 'tasks';
+      document.getElementById('new-msg-btn').hidden = v !== 'messages';
+      document.getElementById('view-tasks').classList.toggle('on', v === 'tasks');
+      document.getElementById('view-messages').classList.toggle('on', v === 'messages');
+      if (v === 'messages') loadMessages();
+    }
+
+    // ---- Messages ----
+
+    var msgState = { me: '', groups: [], messages: [], undoMinutes: 5 };
+    var msgOpen = {};
+    function loadMessages() {
+      google.script.run
+        .withSuccessHandler(renderMessages)
+        .withFailureHandler(function (err) {
+          document.getElementById('msg-lists').innerHTML = '<p class="msg-empty">Couldn’t load messages: ' + escapeHtml(err && err.message) + '</p>';
+        })
+        .getMessages(KEY);
+    }
+    function findMsg(id) { return msgState.messages.filter(function (m) { return m.id === id; })[0]; }
+    function fmtWhen(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d)) return '';
+      return d.toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+    function fmtTime(iso) {
+      var d = new Date(iso);
+      return isNaN(d) ? '' : d.toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
+    }
+    function msgBtn(action, id, label, primary) {
+      return '<button' + (primary ? ' class="primary"' : '') + ' data-msg-action="' + action + '" data-id="' + escapeHtml(id) + '">' + label + '</button>';
+    }
+    function msgHtml(m) {
+      var mine = m.authorEmail === msgState.me;
+      var actions = '';
+      var extra = '';
+      var toAct = false;
+      if (m.status === 'Draft' || m.status === 'Returned') {
+        if (mine) {
+          actions = msgBtn('edit', m.id, 'Edit') +
+            msgBtn('submit', m.id, m.needsApproval ? 'Ask for approval…' : 'Send…', true) +
+            msgBtn('cancel', m.id, 'Discard');
+          toAct = true;
+        }
+        if (m.status === 'Returned' && m.comment) extra += '<div class="comment">' + escapeHtml(m.comment) + '</div>';
+      } else if (m.status === 'Awaiting approval') {
+        if (mine) {
+          actions = msgBtn('withdraw', m.id, 'Take back to edit') + msgBtn('cancel', m.id, 'Cancel it');
+        } else {
+          actions = msgBtn('approve', m.id, 'Approve…', true) + msgBtn('return', m.id, 'Send back…') + msgBtn('cancel', m.id, 'Cancel it');
+          toAct = true;
+        }
+      } else if (m.status === 'Queued') {
+        extra += '<div class="queued-note">Goes out shortly after ' + escapeHtml(fmtTime(m.sendAfter)) +
+          '. Any director can still cancel it until then.</div>';
+        actions = msgBtn('cancel', m.id, 'Cancel – don’t send');
+      }
+      var meta = [escapeHtml(m.groupName), '<span class="status">' + escapeHtml(m.status) + '</span>',
+        'by ' + escapeHtml(m.authorName)];
+      if (m.approverName) meta.push('approved by ' + escapeHtml(m.approverName));
+      if (m.status === 'Sent') meta.push('sent ' + escapeHtml(fmtWhen(m.sentAt)));
+      else if (m.status === 'Cancelled') meta.push('cancelled by ' + escapeHtml(m.closedBy || '—'));
+      else meta.push('updated ' + escapeHtml(fmtWhen(m.updatedAt)));
+      var long = m.plain.length > 280 || (m.plain.match(/\n/g) || []).length > 4;
+      return '<div class="msg' + (toAct ? ' mine-to-act' : '') + (msgOpen[m.id] ? ' expanded' : '') + '" data-msg="' + escapeHtml(m.id) + '">' +
+        '<h3>' + escapeHtml(m.subject) + '</h3>' +
+        '<div class="meta">' + meta.join(' · ') + '</div>' +
+        '<div class="body">' + m.html.replace(/<a /g, '<a target="_blank" rel="noopener" ') + '</div>' +
+        (long ? '<button class="link more" data-msg-action="more" data-id="' + escapeHtml(m.id) + '">' + (msgOpen[m.id] ? 'Show less' : 'Show all') + '</button>' : '') +
+        extra +
+        (actions ? '<div class="actions">' + actions + '</div>' : '') +
+        '</div>';
+    }
+    function renderMessages(state) {
+      msgState = state;
+      var me = state.me;
+      var needMe = [], live = [], closed = [];
+      state.messages.forEach(function (m) {
+        if (m.status === 'Sent' || m.status === 'Cancelled' || m.status === 'Expired') closed.push(m);
+        else if ((m.status === 'Awaiting approval' && m.authorEmail !== me) ||
+                 ((m.status === 'Draft' || m.status === 'Returned') && m.authorEmail === me)) needMe.push(m);
+        else if (m.status === 'Draft' && m.authorEmail !== me) { /* other people's drafts stay private */ }
+        else live.push(m);
+      });
+      var approvals = needMe.filter(function (m) { return m.status === 'Awaiting approval'; }).length;
+      var badge = document.getElementById('msg-badge');
+      badge.hidden = approvals === 0;
+      badge.textContent = approvals;
+      var section = function (title, list, empty) {
+        return '<h2>' + title + '</h2>' + (list.length ? list.map(msgHtml).join('') : '<p class="msg-empty">' + empty + '</p>');
+      };
+      document.getElementById('msg-lists').innerHTML =
+        section('Needs you', needMe, 'Nothing for you to approve or finish.') +
+        section('On its way', live, 'Nothing waiting to go out.') +
+        section('Sent and closed', closed, 'No messages yet.');
+    }
+
+    document.getElementById('messages').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-msg-action]');
+      if (!b || busy) return;
+      var id = b.getAttribute('data-id');
+      var action = b.getAttribute('data-msg-action');
+      var m = findMsg(id);
+      if (!m) return;
+      var label = b.textContent;
+      var opts = function (working, done) {
+        return { button: b, label: label, working: working, done: done, onSuccess: renderMessages };
+      };
+      if (action === 'more') { msgOpen[id] = !msgOpen[id]; renderMessages(msgState); return; }
+      if (action === 'edit') { openComposeModal(id); return; }
+      if (action === 'return') { openReturnModal(id); return; }
+      if (action === 'withdraw') { call('returnMessage', [id, ''], opts('Taking back…', 'Back in your drafts.')); return; }
+      if (action === 'submit') { confirmSubmit(m); return; }
+      if (action === 'approve') {
+        openConfirm('Approve and send?',
+          'This approves “' + m.subject + '” for the ' + m.groupName + ' group (' + groupEmail(m.group) + '). It goes out about ' +
+          msgState.undoMinutes + '–' + (msgState.undoMinutes + 5) + ' minutes from now, and any director can cancel it until then.',
+          'Approve', function () { call('approveMessage', [id], opts('Approving…', 'Approved. It goes out in a few minutes.')); });
+        return;
+      }
+      if (action === 'cancel') {
+        var isDraft = m.status === 'Draft' || m.status === 'Returned';
+        openConfirm(isDraft ? 'Discard this draft?' : 'Cancel this message?',
+          isDraft ? 'The draft will be closed and won’t be sent.' : '“' + m.subject + '” won’t be sent to the ' + m.groupName + ' group.',
+          isDraft ? 'Discard' : 'Cancel the message',
+          function () { call('cancelMessage', [id], opts('Cancelling…', isDraft ? 'Draft discarded.' : 'Cancelled. It won’t be sent.')); });
+      }
+    });
+
+    function groupEmail(id) {
+      var g = msgState.groups.filter(function (x) { return x.id === id; })[0];
+      return g ? g.email : '';
+    }
+    function confirmSubmit(m) {
+      if (m.needsApproval) {
+        openConfirm('Ask for approval?',
+          'The other directors will be emailed asking one of them to approve “' + m.subject + '” for the ' + m.groupName +
+          ' group. Nothing goes to residents until someone approves it.',
+          'Ask for approval', function () { call('submitMessage', [m.id], { label: '', working: 'Sending for approval…', done: 'Sent to the other directors for approval.', onSuccess: renderMessages }); });
+      } else {
+        openConfirm('Send this message?',
+          '“' + m.subject + '” will go to the ' + m.groupName + ' group (' + groupEmail(m.group) + ') about ' + msgState.undoMinutes + '–' +
+          (msgState.undoMinutes + 5) + ' minutes from now. Any director can cancel it until then.',
+          'Send', function () { call('submitMessage', [m.id], { label: '', working: 'Queuing…', done: 'Queued. It goes out in a few minutes.', onSuccess: renderMessages }); });
+      }
+    }
+
+    // Compose / edit
+    var composeId = null;
+    function openComposeModal(id) {
+      composeId = id || null;
+      var m = id ? findMsg(id) : null;
+      var sel = document.getElementById('m-group');
+      sel.innerHTML = msgState.groups.map(function (g) {
+        return '<option value="' + escapeHtml(g.id) + '"' + (g.enabled ? '' : ' disabled') + '>' + escapeHtml(g.name) +
+          (g.enabled ? '' : ' (not set up yet)') + '</option>';
+      }).join('');
+      var first = msgState.groups.filter(function (g) { return g.enabled; })[0];
+      sel.value = m ? m.group : (first ? first.id : '');
+      document.getElementById('m-subject').value = m ? m.subject : '';
+      document.getElementById('m-body').innerHTML = m ? m.html : '';
+      document.getElementById('compose-title').textContent = m ? 'Edit message' : 'New message';
+      syncComposeHint();
+      closeLinkRow();
+      syncPreview();
+      document.getElementById('compose-modal').classList.add('open');
+    }
+    function closeComposeModal() { document.getElementById('compose-modal').classList.remove('open'); composeId = null; closeLinkRow(); }
+    function syncComposeHint() {
+      var g = msgState.groups.filter(function (x) { return x.id === document.getElementById('m-group').value; })[0];
+      document.getElementById('m-group-hint').textContent = !g ? '' :
+        g.email + (g.approval ? ' · needs another director’s approval before it goes out' : ' · no approval needed');
+      document.getElementById('m-send-btn').textContent = g && g.approval ? 'Save and ask for approval…' : 'Save and send…';
+    }
+    // Preview: rebuilt from the editor using the same short list of allowed formatting as the server.
+    function previewClean(node, out) {
+      var map = { P: 'p', DIV: 'p', BR: 'br', B: 'strong', STRONG: 'strong', I: 'em', EM: 'em', U: 'u', UL: 'ul', OL: 'ol', LI: 'li', H3: 'h3', A: 'a' };
+      Array.prototype.forEach.call(node.childNodes, function (n) {
+        if (n.nodeType === 3) { out.appendChild(document.createTextNode(n.nodeValue)); return; }
+        if (n.nodeType !== 1) return;
+        var tag = map[n.tagName];
+        if (!tag) { previewClean(n, out); return; }
+        var el = document.createElement(tag);
+        if (tag === 'a') {
+          var href = n.getAttribute('href') || '';
+          if (!/^(https?:\/\/|mailto:)/i.test(href)) { previewClean(n, out); return; }
+          el.setAttribute('href', href);
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener');
+        }
+        if (tag !== 'br') previewClean(n, el);
+        out.appendChild(el);
+      });
+    }
+    function syncPreview() {
+      var box = document.getElementById('m-preview');
+      var src = document.getElementById('m-body');
+      box.innerHTML = '';
+      if (src.textContent.trim()) previewClean(src, box);
+      else box.innerHTML = '<p class="sig">Your message appears here.</p>';
+      var sig = document.createElement('p');
+      sig.className = 'sig';
+      sig.innerHTML = 'The Directors<br>St Helens OMC';
+      box.appendChild(sig);
+    }
+    document.getElementById('m-body').addEventListener('input', syncPreview);
+    // Rich-text editor
+    var rtSaved = null;
+    function rtEditor() { return document.getElementById('m-body'); }
+    function rtFocus() { rtEditor().focus(); }
+    function rtSelectionInside() {
+      var sel = window.getSelection();
+      return sel.rangeCount && rtEditor().contains(sel.getRangeAt(0).commonAncestorContainer);
+    }
+    function closeLinkRow() { document.getElementById('rt-link').classList.remove('open'); document.getElementById('rt-url').value = ''; rtSaved = null; }
+    function rtCommand(name) {
+      rtFocus();
+      if (name === 'bold') document.execCommand('bold');
+      else if (name === 'italic') document.execCommand('italic');
+      else if (name === 'ul') document.execCommand('insertUnorderedList');
+      else if (name === 'ol') document.execCommand('insertOrderedList');
+      else if (name === 'heading') {
+        var cur = (document.queryCommandValue('formatBlock') || '').toLowerCase();
+        document.execCommand('formatBlock', false, cur === 'h3' ? 'p' : 'h3');
+      } else if (name === 'clear') {
+        document.execCommand('removeFormat');
+        document.execCommand('unlink');
+        document.execCommand('formatBlock', false, 'p');
+      } else if (name === 'link') {
+        if (!rtSelectionInside() || window.getSelection().isCollapsed) { showStatus('Select the words you want to turn into a link first.'); return; }
+        rtSaved = window.getSelection().getRangeAt(0).cloneRange();
+        document.getElementById('rt-link').classList.add('open');
+        document.getElementById('rt-url').focus();
+      }
+    }
+    function rtApplyLink() {
+      var url = document.getElementById('rt-url').value.trim();
+      if (/^www\./i.test(url)) url = 'https://' + url;
+      if (!/^(https?:\/\/|mailto:)\S+$/i.test(url)) { showStatus('Enter a full web address starting with https://'); return; }
+      rtFocus();
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      if (rtSaved) sel.addRange(rtSaved);
+      document.execCommand('createLink', false, url);
+      closeLinkRow();
+      syncPreview();
+    }
+    function linkifyText(text) {
+      return escapeHtml(text).replace(/\b(https?:\/\/[^\s<]+)/g, function (u) {
+        var trail = (u.match(/[.,;:!?)]+$/) || [''])[0];
+        var clean = trail ? u.slice(0, -trail.length) : u;
+        return '<a href="' + clean + '">' + clean + '</a>' + trail;
+      }).replace(/\n/g, '<br>');
+    }
+    document.getElementById('rt-bar').addEventListener('mousedown', function (e) { e.preventDefault(); });
+    document.getElementById('rt-bar').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-rt]');
+      if (b) { rtCommand(b.getAttribute('data-rt')); syncPreview(); }
+    });
+    document.getElementById('rt-link-ok').addEventListener('click', rtApplyLink);
+    document.getElementById('rt-link-cancel').addEventListener('click', closeLinkRow);
+    document.getElementById('rt-url').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); rtApplyLink(); }
+      else if (e.key === 'Escape') { e.stopPropagation(); closeLinkRow(); rtFocus(); }
+    });
+    // Paste as plain text (web addresses become links) so stray fonts and colours never come along.
+    document.getElementById('m-body').addEventListener('paste', function (e) {
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertHTML', false, linkifyText(text.replace(/\r\n?/g, '\n')));
+    });
+    try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (err) {}
+    function saveCompose(thenSend) {
+      var input = {
+        id: composeId, group: document.getElementById('m-group').value,
+        subject: document.getElementById('m-subject').value.trim(),
+        body: document.getElementById('m-body').innerHTML
+      };
+      if (!input.subject) { showStatus('Add a subject.'); return; }
+      if (!document.getElementById('m-body').textContent.trim()) { showStatus('Write the message first.'); return; }
+      var before = {};
+      msgState.messages.forEach(function (m) { before[m.id] = true; });
+      var btn = thenSend ? document.getElementById('m-send-btn') : document.querySelector('#compose-modal .modal-actions button:nth-child(2)');
+      var btnLabel = btn.textContent;
+      call('saveMessage', [input], {
+        button: btn, label: btnLabel, working: 'Saving…', done: 'Draft saved.',
+        onSuccess: function (state) {
+          btn.textContent = btnLabel;
+          renderMessages(state);
+          var id = composeId || (state.messages.filter(function (m) { return !before[m.id]; })[0] || {}).id;
+          closeComposeModal();
+          syncComposeHint();
+          if (thenSend && id) confirmSubmit(findMsg(id));
+        }
+      });
+    }
+
+    // Confirmation and send-back dialogs
+    var confirmAction = null;
+    function openConfirm(title, text, okLabel, fn) {
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-text').textContent = text;
+      var ok = document.getElementById('confirm-ok');
+      ok.textContent = okLabel;
+      confirmAction = fn;
+      document.getElementById('confirm-modal').classList.add('open');
+    }
+    function closeConfirm() { document.getElementById('confirm-modal').classList.remove('open'); confirmAction = null; }
+    document.getElementById('confirm-ok').addEventListener('click', function () {
+      var fn = confirmAction;
+      closeConfirm();
+      if (fn) fn();
+    });
+    var returnId = null;
+    function openReturnModal(id) {
+      returnId = id;
+      document.getElementById('r-comment').value = '';
+      document.getElementById('return-modal').classList.add('open');
+      setTimeout(function () { document.getElementById('r-comment').focus(); }, 50);
+    }
+    function closeReturnModal() { document.getElementById('return-modal').classList.remove('open'); returnId = null; }
+    function submitReturn() {
+      var id = returnId;
+      var comment = document.getElementById('r-comment').value.trim();
+      if (!comment) { showStatus('Say what should change.'); return; }
+      closeReturnModal();
+      call('returnMessage', [id, comment], { label: '', working: 'Sending back…', done: 'Sent back to the author.', onSuccess: renderMessages });
+    }
+
+    // ---- Edit title and details ----
+
+    var editTaskId = null;
+    function openEditModal(taskId) {
+      editTaskId = taskId;
+      var t = findTask(taskId) || {};
+      document.getElementById('e-title').value = t.title || '';
+      document.getElementById('e-desc').value = t.description || '';
+      document.getElementById('edit-modal').classList.add('open');
+      setTimeout(function () { document.getElementById('e-title').focus(); }, 50);
+    }
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.remove('open');
+      editTaskId = null;
+    }
+    function submitEdit() {
+      if (!editTaskId) return;
+      var title = document.getElementById('e-title').value.trim();
+      if (!title) { showStatus('The title can\u2019t be empty.'); document.getElementById('e-title').focus(); return; }
+      var btn = document.querySelector('#edit-modal button.primary');
+      call('editTask', [editTaskId, { title: title, description: document.getElementById('e-desc').value }], {
+        button: btn, label: 'Save', working: 'Saving…', done: 'Task updated.',
+        onSuccess: function (tasks) { btn.textContent = 'Save'; renderBoard(tasks); closeEditModal(); }
+      });
+    }
+
+    // ---- Dates / Later ----
+
+    function openDatesModal(taskId) {
+      datesTaskId = taskId;
+      var t = findTask(taskId) || {};
+      document.getElementById('dates-title').textContent = t.title || '';
+      document.getElementById('d-due').value = t.dueDate || '';
+      var mode = !t.deferUntil ? '' : (t.deferUntil === 'Someday' ? 'someday' : 'date');
+      if (mode === 'date' && t.deferUntil <= todayIso()) mode = '';  // already came back
+      var radios = document.getElementsByName('d-defer');
+      for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === mode;
+      document.getElementById('d-defer-date').value = mode === 'date' ? t.deferUntil : '';
+      syncDeferInput();
+      document.getElementById('dates-modal').classList.add('open');
+    }
+    function closeDatesModal() {
+      document.getElementById('dates-modal').classList.remove('open');
+      datesTaskId = null;
+    }
+    function deferMode() {
+      var radios = document.getElementsByName('d-defer');
+      for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
+      return '';
+    }
+    function syncDeferInput() {
+      var input = document.getElementById('d-defer-date');
+      input.hidden = deferMode() !== 'date';
+      if (!input.hidden && !input.value) input.focus();
+    }
+    function submitDates() {
+      if (!datesTaskId) return;
+      var mode = deferMode();
+      var defer = '';
+      if (mode === 'someday') defer = 'someday';
+      if (mode === 'date') {
+        defer = document.getElementById('d-defer-date').value;
+        if (!defer) { showStatus('Pick the date it should come back.'); return; }
+        if (defer <= todayIso()) { showStatus('Pick a date after today.'); return; }
+      }
+      var btn = document.querySelector('#dates-modal button.primary');
+      call('setDates', [datesTaskId, { dueDate: document.getElementById('d-due').value, defer: defer }], {
+        button: btn, label: 'Save', working: 'Saving…',
+        done: mode ? 'Moved to Later.' : 'Dates saved.',
+        onSuccess: function (tasks) { btn.textContent = 'Save'; renderBoard(tasks); closeDatesModal(); }
+      });
+    }
+
+    // ---- Delete ----
+
+    function openDeleteModal(taskId) {
+      deleteTaskId = taskId;
+      var t = lastTasks.filter(function (x) { return x.id === taskId; })[0];
+      document.getElementById('delete-title').textContent = t ? t.title : '';
+      document.getElementById('delete-modal').classList.add('open');
+    }
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.remove('open');
+      deleteTaskId = null;
+    }
+    function submitDelete() {
+      if (!deleteTaskId) return;
+      var btn = document.querySelector('#delete-modal button.primary');
+      call('deleteTask', [deleteTaskId], {
+        button: btn, label: 'Yes, delete it', working: 'Deleting…', done: 'Task deleted.',
+        onSuccess: function (tasks) { btn.textContent = 'Yes, delete it'; renderBoard(tasks); closeDeleteModal(); }
+      });
+    }
+
+    // ---- Dropdown helpers ----
+
+    function fillSelect(id, options, otherLabel) {
+      var sel = document.getElementById(id);
+      sel.innerHTML = options.map(function (o) {
+        return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>';
+      }).join('') + '<option value="' + OTHER + '">' + escapeHtml(otherLabel) + '</option>';
+      sel.selectedIndex = 0;
+    }
+    function toggleOther(selectId, inputId) {
+      var other = document.getElementById(selectId).value === OTHER;
+      var input = document.getElementById(inputId);
+      input.hidden = !other;
+      if (other) input.focus(); else input.value = '';
+    }
+    function pickedValue(selectId, inputId) {
+      var v = document.getElementById(selectId).value;
+      return v === OTHER ? document.getElementById(inputId).value.trim() : v;
+    }
+
+    // ---- Sign-in ----
+
+    function getStoredKey() {
+      try { return localStorage.getItem(STORE) || ''; } catch (e) { return ''; }
+    }
+    function setStoredKey(k) {
+      try { if (k) localStorage.setItem(STORE, k); else localStorage.removeItem(STORE); } catch (e) {}
+    }
+    function showOnly(id) {
+      ['signin-pick', 'signin-sent', 'signin-wait'].forEach(function (x) {
+        document.getElementById(x).hidden = (x !== id);
+      });
+      document.getElementById('signin').hidden = false;
+      document.getElementById('board').hidden = true;
+      document.getElementById('who').hidden = true;
+      document.getElementById('add-btn').hidden = true;
+      document.getElementById('views').hidden = true;
+      document.getElementById('messages').hidden = true;
+      document.getElementById('new-msg-btn').hidden = true;
+    }
+    function showPick() {
+      showOnly('signin-pick');
+      var sel = document.getElementById('signin-name');
+      google.script.run
+        .withSuccessHandler(function (names) {
+          sel.innerHTML = '<option value="">— choose your name —</option>' + names.map(function (n) {
+            return '<option>' + escapeHtml(n) + '</option>';
+          }).join('');
+        })
+        .withFailureHandler(function () { showStatus('Couldn’t load the list of names. Please reload the page.'); })
+        .getSignInNames();
+    }
+    function doRequestSignIn() {
+      var name = document.getElementById('signin-name').value;
+      if (!name) { showStatus('Please choose your name first.'); return; }
+      var btn = document.getElementById('signin-btn');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Email me a code';
+          PENDING_NAME = name;
+          document.getElementById('signin-to').textContent = r.sentTo;
+          document.getElementById('signin-code').value = '';
+          showOnly('signin-sent');
+          document.getElementById('signin-code').focus();
+          if (r.recent) showStatus('A code was sent less than a minute ago. Please use that one.');
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false; btn.textContent = 'Email me a code';
+          showStatus(err && err.message ? err.message : 'Something went wrong. Please try again.');
+        })
+        .requestSignIn(name);
+    }
+    var PENDING_NAME = '';
+    function doCompleteSignIn() {
+      var code = document.getElementById('signin-code').value.replace(/\D/g, '');
+      if (code.length !== 6) { showStatus('Please enter the 6-digit code from the email.'); return; }
+      var btn = document.getElementById('signin-code-btn');
+      btn.disabled = true; btn.textContent = 'Checking…';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false; btn.textContent = 'Sign in';
+          KEY = r.key;
+          setStoredKey(KEY);
+          enterBoard(r.name);
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false; btn.textContent = 'Sign in';
+          showStatus(err && err.message ? err.message : 'Something went wrong. Please try again.');
+        })
+        .completeCodeSignIn(PENDING_NAME, code);
+    }
+    function enterBoard(name) {
+      document.getElementById('signin').hidden = true;
+      document.getElementById('board').hidden = false;
+      document.getElementById('who-name').textContent = name;
+      MY_NAME = name;
+      document.getElementById('who').hidden = false;
+      document.getElementById('views').hidden = false;
+      loadDirectors();
+      loadTasks();
+      loadDigest();
+      loadMessages();
+      showView(OPEN_VIEW === 'messages' ? 'messages' : 'tasks');
+      if (OPEN_ADD) {
+        OPEN_ADD = false;  // only once, not after every sign-in
+        try { google.script.history.replace(null, {}, ''); } catch (e) {}
+        openAddModal();
+        setTimeout(function () { document.getElementById('f-title').focus(); }, 50);
+      }
+    }
+    function loadDigest() {
+      google.script.run
+        .withSuccessHandler(function (v) { document.getElementById('my-digest').value = v; })
+        .getMyDigest(KEY);
+    }
+    function saveDigest() {
+      var sel = document.getElementById('my-digest');
+      var msg = document.getElementById('digest-msg');
+      msg.textContent = 'Saving…';
+      google.script.run
+        .withSuccessHandler(function (v) { sel.value = v; msg.textContent = 'Saved'; setTimeout(function () { msg.textContent = ''; }, 2500); })
+        .withFailureHandler(function () { msg.textContent = 'Couldn’t save. Try again.'; loadDigest(); })
+        .setMyDigest(KEY, sel.value);
+    }
+    function doSignOut() {
+      var k = KEY;
+      KEY = '';
+      setStoredKey('');
+      if (k) google.script.run.signOut(k);
+      showPick();
+    }
+
+    (function start() {
+      if (SIGNIN_TOKEN) {
+        // Old emailed sign-in links are no longer used; sign-in is by code now.
+        try { google.script.history.replace(null, {}, ''); } catch (e) {}
+        showPick();
+        showStatus('Sign-in now uses a 6-digit code. Choose your name and we’ll email you one.');
+        return;
+      }
+      var stored = getStoredKey();
+      if (!stored) { showPick(); return; }
+      showOnly('signin-wait');
+      google.script.run
+        .withSuccessHandler(function (me) {
+          if (me) { KEY = stored; enterBoard(me.name); }
+          else { setStoredKey(''); showPick(); }
+        })
+        .withFailureHandler(function () { showPick(); })
+        .whoAmI(stored);
+    })();
+  </script>
+</body>
+</html>
+
