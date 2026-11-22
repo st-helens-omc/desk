@@ -140,6 +140,11 @@
       padding: 10px 12px;
       cursor: pointer;
     }
+    @media (hover: hover) and (pointer: fine) {
+      .card-head[draggable="true"] { cursor: grab; }
+      .card.dragging { opacity: 0.45; }
+      .column.drop-ok { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 12px; }
+    }
     .card-head .chev {
       flex: none;
       width: 10px;
@@ -720,7 +725,7 @@
     function call(fnName, args, opts) {
       if (busy) return;
       var btn = opts.button || null;
-      var card = btn && btn.closest ? btn.closest('.card') : null;
+      var card = opts.card || (btn && btn.closest ? btn.closest('.card') : null);
       setBusy(true);
       if (btn) btn.textContent = opts.working;
       if (card) card.classList.add('saving');
@@ -876,6 +881,73 @@
         return;
       }
       el.innerHTML = tasks.map(function (t) { return cardHtml(t, kind); }).join('');
+      if (CAN_DRAG) el.querySelectorAll('.card-head').forEach(function (h) { h.setAttribute('draggable', 'true'); });
+    }
+
+    // ---- Drag and drop between columns (computers with a mouse only) ----
+    // Open → In Progress asks who's taking it (you're preselected); → Done marks it done;
+    // → Open reopens it with nobody assigned. Phones keep using the buttons on each card.
+    var CAN_DRAG = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+    var dragId = null;
+    var COLUMN_STATUS = { 'list-open': 'Open', 'list-progress': 'In Progress', 'list-done': 'Done' };
+    function columnOf(el) {
+      var col = el && el.closest ? el.closest('.column') : null;
+      var list = col && col.querySelector('.cardlist');
+      return list && COLUMN_STATUS[list.id] ? { col: col, status: COLUMN_STATUS[list.id] } : null;
+    }
+    function clearDropMarks() {
+      document.querySelectorAll('.column.drop-ok').forEach(function (c) { c.classList.remove('drop-ok'); });
+    }
+    if (CAN_DRAG) {
+      var colsEl = document.querySelector('#board .columns');
+      colsEl.addEventListener('dragstart', function (ev) {
+        var head = ev.target.closest && ev.target.closest('.card-head');
+        var card = head && head.closest('.card');
+        if (!card || busy) { ev.preventDefault(); return; }
+        dragId = card.getAttribute('data-id');
+        ev.dataTransfer.effectAllowed = 'move';
+        try { ev.dataTransfer.setData('text/plain', dragId); } catch (e) {}
+        setTimeout(function () { card.classList.add('dragging'); }, 0);
+      });
+      colsEl.addEventListener('dragend', function () {
+        dragId = null; clearDropMarks();
+        document.querySelectorAll('.card.dragging').forEach(function (c) { c.classList.remove('dragging'); });
+      });
+      colsEl.addEventListener('dragover', function (ev) {
+        if (!dragId) return;
+        var target = columnOf(ev.target);
+        var task = lastTasks.filter(function (t) { return t.id === dragId; })[0];
+        if (!target || !task || task.status === target.status) { clearDropMarks(); return; }
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        if (!target.col.classList.contains('drop-ok')) { clearDropMarks(); target.col.classList.add('drop-ok'); }
+      });
+      colsEl.addEventListener('drop', function (ev) {
+        var target = columnOf(ev.target);
+        var id = dragId;
+        clearDropMarks();
+        if (!target || !id) return;
+        ev.preventDefault();
+        var task = lastTasks.filter(function (t) { return t.id === id; })[0];
+        if (!task || task.status === target.status || busy) return;
+        dropTask(task, target.status);
+      });
+    }
+    function dropTask(task, status) {
+      var card = document.querySelector('.card[data-id="' + task.id.replace(/"/g, '') + '"]');
+      var opts = function (working, done) {
+        return { card: card, working: working, done: done, onSuccess: renderBoard };
+      };
+      if (status === 'In Progress') {
+        if (task.assigneeName) { call('updateStatus', [task.id, 'In Progress'], opts('Moving…', 'Moved to In Progress.')); return; }
+        openAssignModal(task.id);  // who's taking it? (you're preselected)
+        var mine = directors.filter(function (d) { return d.name === MY_NAME; })[0];
+        if (mine) { document.getElementById('f-assignee').value = mine.email; toggleOther('f-assignee', 'f-assignee-new'); }
+      } else if (status === 'Done') {
+        call('updateStatus', [task.id, 'Done'], opts('Marking done…', 'Marked done.'));
+      } else if (status === 'Open') {
+        call('updateStatus', [task.id, 'Open'], opts('Reopening…', 'Reopened, with nobody assigned.'));
+      }
     }
 
     function btnHtml(action, id, label) {
