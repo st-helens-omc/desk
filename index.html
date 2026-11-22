@@ -359,6 +359,14 @@
     .preview h3 { font-size: 15px; margin: 0 0 .5em; }
     .preview a { color: var(--accent); text-decoration: underline; }
     .preview .sig { color: var(--muted); margin: 0; }
+    .att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+    .att-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 13px; max-width: 100%; }
+    .att-chip .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+    .att-chip .sz { color: var(--muted); }
+    .att-chip button { border: none; background: none; padding: 0 6px; font-size: 15px; line-height: 1; cursor: pointer; color: var(--muted); min-width: 0; }
+    .att-chip.busy { opacity: .6; }
+    .msg .atts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+    .msg .atts button { font-size: 13px; padding: 3px 10px; border-radius: 999px; }
     .modal.wide { max-width: 600px; }
     .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
     @media (prefers-reduced-motion: reduce) {
@@ -580,6 +588,11 @@
         </div>
         <div class="rt-editor" id="m-body" contenteditable="true" data-placeholder="Write your message here…"></div>
         <div class="hint">To add a link, select some text, press Link and paste the address.</div>
+        <div class="att-row" id="att-row">
+          <button type="button" id="att-btn">📎 Attach a file</button>
+          <input type="file" id="att-input" multiple hidden accept=".pdf,.jpg,.jpeg,.png,.heic,.gif,.doc,.docx,.xls,.xlsx,.txt,application/pdf,image/*">
+        </div>
+        <div class="hint">PDFs, photos, Word or Excel files. Up to 10 MB each, 15 MB in total.</div>
       </div>
       <div class="field">
         <label>How it will look</label>
@@ -1184,6 +1197,9 @@
         '<h3>' + escapeHtml(m.subject) + '</h3>' +
         '<div class="meta">' + meta.join(' · ') + '</div>' +
         '<div class="body">' + m.html.replace(/<a /g, '<a target="_blank" rel="noopener" ') + '</div>' +
+        (m.attachments && m.attachments.length ? '<div class="atts">' + m.attachments.map(function (a) {
+          return '<button data-msg-action="att" data-id="' + escapeHtml(a.id) + '" data-name="' + escapeHtml(a.name) + '">📎 ' + escapeHtml(a.name) + '</button>';
+        }).join('') + '</div>' : '') +
         (long ? '<button class="link more" data-msg-action="more" data-id="' + escapeHtml(m.id) + '">' + (msgOpen[m.id] ? 'Show less' : 'Show all') + '</button>' : '') +
         extra +
         (actions ? '<div class="actions">' + actions + '</div>' : '') +
@@ -1218,6 +1234,7 @@
       if (!b || busy) return;
       var id = b.getAttribute('data-id');
       var action = b.getAttribute('data-msg-action');
+      if (action === 'att') { openAttachment(id, b.getAttribute('data-name'), b); return; }
       var m = findMsg(id);
       if (!m) return;
       var label = b.textContent;
@@ -1267,6 +1284,7 @@
     var composeId = null;
     function openComposeModal(id) {
       composeId = id || null;
+      composeAtts = [];
       var m = id ? findMsg(id) : null;
       var sel = document.getElementById('m-group');
       sel.innerHTML = msgState.groups.map(function (g) {
@@ -1277,6 +1295,8 @@
       sel.value = m ? m.group : (first ? first.id : '');
       document.getElementById('m-subject').value = m ? m.subject : '';
       document.getElementById('m-body').innerHTML = m ? m.html : '';
+      composeAtts = m && m.attachments ? m.attachments.map(function (a) { return { id: a.id, name: a.name, size: a.size }; }) : [];
+      renderComposeAtts();
       document.getElementById('compose-title').textContent = m ? 'Edit message' : 'New message';
       syncComposeHint();
       closeLinkRow();
@@ -1320,8 +1340,91 @@
       sig.className = 'sig';
       sig.innerHTML = 'The Directors<br>St Helens OMC';
       box.appendChild(sig);
+      var ready = composeAtts.filter(function (a) { return a.id; });
+      if (ready.length) {
+        var at = document.createElement('p');
+        at.className = 'sig';
+        at.style.marginTop = '.7em';
+        at.textContent = 'Attached: ' + ready.map(function (a) { return a.name; }).join(', ');
+        box.appendChild(at);
+      }
     }
     document.getElementById('m-body').addEventListener('input', syncPreview);
+    // ---- Attachments ----
+    var composeAtts = [];  // {id, name, size}; id is empty while uploading
+    var ATT_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', gif: 'image/gif',
+      doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain' };
+    function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+    function renderComposeAtts() {
+      var row = document.getElementById('att-row');
+      row.querySelectorAll('.att-chip').forEach(function (c) { c.remove(); });
+      var btn = document.getElementById('att-btn');
+      composeAtts.forEach(function (a, i) {
+        var chip = document.createElement('span');
+        chip.className = 'att-chip' + (a.id ? '' : ' busy');
+        chip.innerHTML = '<span class="n">📎 ' + escapeHtml(a.name) + '</span><span class="sz">' + (a.id ? fmtSize(a.size) : 'uploading…') + '</span>' +
+          (a.id ? '<button type="button" title="Remove" aria-label="Remove ' + escapeHtml(a.name) + '">×</button>' : '');
+        var x = chip.querySelector('button');
+        if (x) x.addEventListener('click', function () { composeAtts.splice(composeAtts.indexOf(a), 1); renderComposeAtts(); syncPreview(); });
+        row.insertBefore(chip, btn);
+      });
+    }
+    function uploadOne(file) {
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var mime = file.type && file.type !== 'application/octet-stream' ? file.type : (ATT_TYPES[ext] || '');
+      if (Object.keys(ATT_TYPES).map(function (k) { return ATT_TYPES[k]; }).indexOf(mime) === -1) {
+        showStatus('“' + file.name + '” can’t be attached. Use a PDF, a photo, or a Word or Excel file.'); return;
+      }
+      if (file.size > 10 * 1048576) { showStatus('“' + file.name + '” is too big (the limit is 10 MB).'); return; }
+      var total = composeAtts.reduce(function (t, a) { return t + (a.size || 0); }, 0);
+      if (total + file.size > 15 * 1048576) { showStatus('That would take the attachments over 15 MB in total.'); return; }
+      var entry = { id: '', name: file.name, size: file.size };
+      composeAtts.push(entry);
+      renderComposeAtts();
+      var reader = new FileReader();
+      reader.onload = function () {
+        var data = String(reader.result).split(',')[1] || '';
+        google.script.run
+          .withSuccessHandler(function (r) { entry.id = r.id; entry.name = r.name; entry.size = r.size; renderComposeAtts(); syncPreview(); })
+          .withFailureHandler(function (err) {
+            composeAtts.splice(composeAtts.indexOf(entry), 1); renderComposeAtts();
+            showStatus('Couldn’t attach “' + file.name + '”: ' + (err && err.message ? err.message : 'please try again.'));
+          })
+          .uploadAttachment(KEY, { name: file.name, mime: mime, data: data });
+      };
+      reader.onerror = function () { composeAtts.splice(composeAtts.indexOf(entry), 1); renderComposeAtts(); showStatus('Couldn’t read that file.'); };
+      reader.readAsDataURL(file);
+    }
+    document.getElementById('att-btn').addEventListener('click', function () { document.getElementById('att-input').click(); });
+    document.getElementById('att-input').addEventListener('change', function (e) {
+      Array.prototype.slice.call(e.target.files || []).forEach(uploadOne);
+      e.target.value = '';
+    });
+    function openAttachment(id, name, btn) {
+      // Open a tab straight away (while the tap still counts), then fill it once the file arrives.
+      var w = null;
+      try { w = window.open('', '_blank'); } catch (e) {}
+      if (w) { try { w.document.title = name || 'Attachment'; w.document.body.textContent = 'Opening ' + (name || 'attachment') + '…'; } catch (e) {} }
+      var label = btn ? btn.textContent : '';
+      if (btn) btn.textContent = 'Opening…';
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (btn) btn.textContent = label;
+          var bin = atob(r.data), bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          var url = URL.createObjectURL(new Blob([bytes], { type: r.mime || 'application/octet-stream' }));
+          if (w && !w.closed) { w.location.href = url; }
+          else { var a = document.createElement('a'); a.href = url; a.download = r.name || name || 'attachment'; document.body.appendChild(a); a.click(); a.remove(); }
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        })
+        .withFailureHandler(function (err) {
+          if (btn) btn.textContent = label;
+          if (w && !w.closed) w.close();
+          showStatus('Couldn’t open the attachment: ' + (err && err.message ? err.message : 'please try again.'));
+        })
+        .getAttachment(KEY, id);
+    }
     // Rich-text editor
     var rtSaved = null;
     function rtEditor() { return document.getElementById('m-body'); }
@@ -1392,8 +1495,10 @@
       var input = {
         id: composeId, group: document.getElementById('m-group').value,
         subject: document.getElementById('m-subject').value.trim(),
-        body: document.getElementById('m-body').innerHTML
+        body: document.getElementById('m-body').innerHTML,
+        attachments: composeAtts.filter(function (a) { return a.id; }).map(function (a) { return a.id; })
       };
+      if (composeAtts.some(function (a) { return !a.id; })) { showStatus('Wait for the attachment to finish uploading.'); return; }
       if (!input.subject) { showStatus('Add a subject.'); return; }
       if (!document.getElementById('m-body').textContent.trim()) { showStatus('Write the message first.'); return; }
       var before = {};
