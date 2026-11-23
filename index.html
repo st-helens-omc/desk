@@ -718,7 +718,7 @@
       <div class="field"><label for="pl-srcnote">Who quoted, or what the guess is based on (optional)</label><input id="pl-srcnote" maxlength="200" placeholder="e.g. Padden, Oct 2026"></div>
       <div class="field"><label for="pl-year">Target year (optional)</label><input id="pl-year" inputmode="numeric" maxlength="4" placeholder="e.g. 2027"></div>
       <div class="field"><label for="pl-status">Status</label>
-        <select id="pl-status"><option value="Planned">Under consideration</option><option value="Committed">Committed</option><option value="Done">Done</option></select>
+        <select id="pl-status"><option>Under consideration</option><option>Committed</option><option>Done</option></select>
         <div class="hint">Committed = quote accepted or deposit paid.</div></div>
       <div class="field"><label for="pl-task">Task on the board (optional)</label><select id="pl-task"></select></div>
       <div class="field"><label for="pl-note">Notes (optional)</label><textarea id="pl-note" maxlength="2000"></textarea></div>
@@ -1905,9 +1905,9 @@
     });
 
     // ---- Sinking fund plan ----
-    // Plan status as shown to directors. The Sheet keeps the original value "Planned" for items
-    // that are only being considered; nothing is decided until an item is marked Committed.
-    var PLAN_LABEL = { Planned: 'Under consideration', Committed: 'Committed', Done: 'Done' };
+    // Plan statuses: Under consideration → Committed → Done (nothing is decided until Committed).
+    // "Planned" was the old word for "Under consideration" (cached copies may still have it).
+    var PLAN_LABEL = { Planned: 'Under consideration', 'Under consideration': 'Under consideration', Committed: 'Committed', Done: 'Done' };
     function planTotals(m, bal) {
       var open = (m.plan || []).filter(function (p) { return p.status !== 'Done'; });
       var committed = open.filter(function (p) { return p.status === 'Committed'; });
@@ -1924,7 +1924,7 @@
       var bal = sink.balance || 0;
       var open = items.filter(function (p) { return p.status !== 'Done'; });
       var remaining = function (p) { return p.estimate == null ? 0 : Math.max(0, p.estimate - (p.spent || 0)); };
-      var planned = open.filter(function (p) { return p.status === 'Planned'; });
+      var planned = open.filter(function (p) { return p.status !== 'Committed'; });   // under consideration
       var committed = open.filter(function (p) { return p.status === 'Committed'; });
       var sum = function (list) { return list.reduce(function (a, p) { return a + remaining(p); }, 0); };
       var noEst = open.filter(function (p) { return p.estimate == null; }).length;
@@ -1948,7 +1948,7 @@
       var yk = Object.keys(byYear).filter(function (y) { return byYear[y] > 0; }).sort();
       if (yk.length) h.push('<p class="plan-years">Still to spend by target year: ' + yk.map(function (y) { return escapeHtml(y) + ' ' + eur(byYear[y]); }).join(' · ') + '</p>');
       h.push('<div class="mny-table"><div class="plan-row head"><span>Item</span><span class="yr">Year</span><span class="stcell">Status</span><span class="num">Estimate</span><span class="num">Paid</span></div>');
-      var order = { Committed: 0, Planned: 1, Done: 2 };
+      var order = { Committed: 0, 'Under consideration': 1, Planned: 1, Done: 2 };
       items.slice().sort(function (a, b) {
         if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
         return String(a.year || '9999').localeCompare(String(b.year || '9999')) || a.name.localeCompare(b.name);
@@ -1973,7 +1973,7 @@
           '</div>';
         h.push('<details class="plan-item' + (p.status === 'Done' ? ' done' : '') + '" data-pid="' + escapeHtml(p.id) + '"' + (moneyOpen['plan:' + p.id] ? ' open' : '') + '>' +
           '<summary class="plan-row"><span class="name">' + escapeHtml(p.name) + src + '</span><span class="yr">' + escapeHtml(p.year || '—') + '</span>' +
-          '<span class="stcell"><span class="plan-st ' + escapeHtml(p.status) + '">' + escapeHtml(PLAN_LABEL[p.status] || p.status) + '</span></span>' +
+          '<span class="stcell"><span class="plan-st ' + escapeHtml(p.status.replace(/\s+/g, '-')) + '">' + escapeHtml(PLAN_LABEL[p.status] || p.status) + '</span></span>' +
           '<span class="num">' + est + '</span><span class="num">' + (p.spent ? eur(p.spent) : '—') + '</span></summary>' + body + '</details>');
       });
       if (!items.length) h.push('<div class="plan-row"><span class="hint">Nothing in the plan yet.</span></div>');
@@ -1990,7 +1990,7 @@
       document.getElementById('pl-src').value = p ? p.source : '';
       document.getElementById('pl-srcnote').value = p ? p.sourceNote : '';
       document.getElementById('pl-year').value = p ? p.year : '';
-      document.getElementById('pl-status').value = p ? p.status : 'Planned';
+      document.getElementById('pl-status').value = p ? (PLAN_LABEL[p.status] || p.status) : 'Under consideration';
       document.getElementById('pl-note').value = p ? p.note : '';
       var tsel = document.getElementById('pl-task');
       tsel.innerHTML = '<option value="">— none —</option>' + lastTasks.filter(function (t) { return t.status !== 'Done' || (p && t.id === p.taskId); })
