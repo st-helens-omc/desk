@@ -78,7 +78,7 @@
       gap: 16px;
     }
     @media (max-width: 760px) {
-      .columns { grid-template-columns: 1fr; }
+      .columns { grid-template-columns: minmax(0, 1fr); }  /* minmax: long titles can't widen the page */
       #board { padding: 14px; }
     }
     .toolbar {
@@ -268,6 +268,7 @@
     }
     .modal-backdrop.open { display: flex; }
     .modal {
+      box-sizing: border-box;  /* padding inside the width, so it never spills off a phone screen */
       background: var(--card);
       border-radius: 12px;
       padding: 20px;
@@ -385,6 +386,17 @@
     .task-full .tf-status { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
     .task-full .desc { white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
     .task-full .history { margin-top: 14px; }
+    /* On a phone the full view of a task fills the screen, like an app page. */
+    @media (max-width: 600px) {
+      #task-modal { padding: 0; align-items: stretch; }
+      #task-modal .task-full {
+        max-width: none; max-height: none; height: 100%; border-radius: 0;
+        padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+      }
+      .task-full .tf-top h2 { font-size: 17px; }
+      .task-full .actions button { flex: 1 1 auto; }
+      .task-full .tf-close { font-size: 28px; padding: 0 6px; }
+    }
     .task-full .tf-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
     .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
     @media (prefers-reduced-motion: reduce) {
