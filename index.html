@@ -373,6 +373,19 @@
     .msg .atts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
     .msg .atts button { font-size: 13px; padding: 3px 10px; border-radius: 999px; }
     .modal.wide { max-width: 600px; }
+    /* Full view of one task (?task=T-xxxx) */
+    .card-head .open-full {
+      flex: none; border: none; background: none; min-width: 0; padding: 2px 4px;
+      color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; border-radius: 5px;
+    }
+    .card-head .open-full:hover { color: var(--accent); background: #eef0ea; }
+    .task-full .tf-top { display: flex; align-items: flex-start; gap: 10px; }
+    .task-full .tf-top h2 { flex: 1; margin: 0 0 10px; font-size: 18px; line-height: 1.3; }
+    .task-full .tf-close { flex: none; border: none; background: none; font-size: 22px; line-height: 1; padding: 0 4px; min-width: 0; color: var(--muted); cursor: pointer; }
+    .task-full .tf-status { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+    .task-full .desc { white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
+    .task-full .history { margin-top: 14px; }
+    .task-full .tf-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
     .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
     @media (prefers-reduced-motion: reduce) {
       #status-msg.working::before { animation: none; }
@@ -452,6 +465,11 @@
       <p class="muted later-note">Parked tasks. A task with a date comes back to the board by itself on that date. “Someday” tasks stay here until someone brings them back.</p>
       <div class="later-list" id="list-later"></div>
     </details>
+  </div>
+
+  <!-- Full view of one task. Kept before the other modals so they open on top of it. -->
+  <div class="modal-backdrop" id="task-modal">
+    <div class="modal wide task-full" id="task-full" role="dialog" aria-modal="true"></div>
   </div>
 
   <!-- Add task modal -->
@@ -677,6 +695,9 @@
     var SIGNIN_TOKEN = (new URLSearchParams(location.search).get('signin') || '').replace(/[^a-f0-9]/g, '');
     var OPEN_ADD = new URLSearchParams(location.search).get('action') === 'add';  // arrived via the "Add a new task" link
     var OPEN_VIEW = (new URLSearchParams(location.search).get('view') || '').replace(/[^a-z]/g, '');  // ?view=messages
+    var OPEN_TASK = (new URLSearchParams(location.search).get('task') || '').replace(/[^A-Za-z0-9-]/g, '');  // ?task=T-xxxx (links in the digest)
+    var DESK_URL = 'https://desk.st-helens.ie/';
+    var taskViewId = null;  // the task shown in the full view, if any
     var STORE = 'stHelensBoardKey';
     var KEY = '';
     var directors = [];
@@ -740,6 +761,7 @@
           setBusy(false);
           if (card) card.classList.remove('saving');
           if (btn && opts.label) btn.textContent = opts.label;
+          if (opts.onFailure) opts.onFailure(err);
           showStatus('Not saved: ' + (err && err.message ? err.message : 'something went wrong. Try again.'));
         });
       runner[fnName].apply(runner, [KEY].concat(args));
@@ -872,6 +894,12 @@
             'Show ' + olderDone + ' done over ' + DONE_DAYS + ' days ago') + '</button>');
       }
       renderColumn('list-later', later, 'later');
+      refreshTaskView();
+      if (OPEN_TASK && tasks) {  // arrived by a link to one task: open it once the tasks are in
+        var want = OPEN_TASK;
+        OPEN_TASK = '';
+        openTaskView(want);
+      }
     }
 
     function renderColumn(elId, tasks, kind) {
@@ -954,7 +982,7 @@
       return '<button data-action="' + action + '" data-id="' + escapeHtml(id) + '">' + label + '</button>';
     }
 
-    function cardHtml(t, kind) {
+    function cardParts(t, kind) {
       var high = isHigh(t);
       var over = isOverdue(t);
 
@@ -1009,23 +1037,99 @@
       var minor = '<button class="link" data-action="edit" data-id="' + escapeHtml(t.id) + '">Edit title or details</button>' +
         '<button class="link delete" data-action="delete" data-id="' + escapeHtml(t.id) + '">Delete task</button>';
 
+      return { marks: marks, tags: tags, actions: actions, minor: minor };
+    }
+
+    function cardHtml(t, kind) {
+      var p = cardParts(t, kind);
+      var high = isHigh(t), marks = p.marks;
       var isOpen = !!openCards[t.id];
       return (
         '<div class="card' + (isOpen ? ' open' : '') + (high ? ' high' : '') + '" data-id="' + escapeHtml(t.id) + '">' +
           '<div class="card-head" role="button" tabindex="0" aria-expanded="' + isOpen + '">' +
             '<span class="chev">▶</span><h3>' + escapeHtml(t.title) + '</h3>' +
             '<span class="marks">' + marks + '</span>' +
+            '<button class="open-full" data-action="full" data-id="' + escapeHtml(t.id) + '" title="Open full view" aria-label="Open full view">⤢</button>' +
           '</div>' +
-          '<div class="card-body">' +
-            (t.description ? '<p class="desc">' + escapeHtml(t.description) + '</p>' : '') +
-            '<div class="tags">' + tags + '</div>' +
-            '<div class="actions">' + actions + '</div>' +
-            '<div class="minor-actions">' + minor + '</div>' +
-            historyHtml(t) +
-          '</div>' +
+          '<div class="card-body">' + bodyHtml(t, p) + '</div>' +
         '</div>'
       );
     }
+
+    function bodyHtml(t, p) {
+      return (t.description ? '<p class="desc">' + escapeHtml(t.description) + '</p>' : '') +
+        '<div class="tags">' + p.tags + '</div>' +
+        '<div class="actions">' + p.actions + '</div>' +
+        '<div class="minor-actions">' + p.minor + '</div>' +
+        historyHtml(t);
+    }
+
+    // ---- Full view of one task ----
+    // Opened from the ⤢ on a card, or by a link like desk.st-helens.ie/?task=T-1234abcd
+    // (each task in the email digest links here). The buttons work exactly as on the card.
+    function kindOf(t) {
+      if (t.status === 'Done') return 'done';
+      if (isDeferred(t)) return 'later';
+      return t.status === 'In Progress' ? 'progress' : 'open';
+    }
+    var KIND_LABEL = { open: 'Open', progress: 'In Progress', done: 'Done', later: 'Parked in Later' };
+    function setTaskUrl(id) {
+      try {
+        if (!/st-helens\.ie$/.test(location.hostname)) return;  // only on the Desk's own address
+        history.replaceState(null, '', location.pathname + (id ? '?task=' + encodeURIComponent(id) : ''));
+      } catch (e) {}
+    }
+    function renderTaskView() {
+      var t = taskViewId && findTask(taskViewId);
+      if (!t) { closeTaskView(); return; }
+      var kind = kindOf(t);
+      var who = t.assigneeName ? ' · ' + escapeHtml(t.assigneeName) : (kind === 'open' ? ' · nobody yet' : '');
+      document.getElementById('task-full').innerHTML =
+        '<div class="tf-top"><h2>' + escapeHtml(t.title) + '</h2>' +
+          '<button class="tf-close" data-action="closefull" aria-label="Close">×</button></div>' +
+        '<div class="tf-status">' + KIND_LABEL[kind] + who +
+          (t.createdDate ? ' · added ' + escapeHtml(fmtDay(t.createdDate)) + (t.createdByName ? ' by ' + escapeHtml(t.createdByName) : '') : '') +
+        '</div>' +
+        bodyHtml(t, cardParts(t, kind)) +
+        '<div class="tf-foot"><button class="link" data-action="copylink" data-id="' + escapeHtml(t.id) + '">Copy link to this task</button>' +
+          '<button data-action="closefull">Close</button></div>';
+      var hist = document.querySelector('#task-full details.history');
+      if (hist) hist.open = true;  // in the full view, show notes & history straight away
+    }
+    function openTaskView(id) {
+      if (!findTask(id)) { showStatus('That task couldn’t be found. It may have been deleted.'); return; }
+      taskViewId = id;
+      renderTaskView();
+      document.getElementById('task-modal').classList.add('open');
+      setTaskUrl(id);
+    }
+    function closeTaskView() {
+      taskViewId = null;
+      document.getElementById('task-modal').classList.remove('open');
+      setTaskUrl('');
+    }
+    function refreshTaskView() {
+      if (!taskViewId) return;
+      var box = document.querySelector('#task-full .note-input');
+      if (box && box.value.trim()) return;  // don't wipe a note someone is typing
+      renderTaskView();
+    }
+    function copyTaskLink(id) {
+      var url = DESK_URL + '?task=' + encodeURIComponent(id);
+      var done = function () { showStatus('Link copied. Paste it into an email or message.'); };
+      try {
+        navigator.clipboard.writeText(url).then(done, function () { window.prompt('Copy this link:', url); });
+      } catch (e) { window.prompt('Copy this link:', url); }
+    }
+    document.getElementById('task-modal').addEventListener('click', function (ev) {
+      if (ev.target.id === 'task-modal') { closeTaskView(); return; }  // click outside the box
+      onTaskClick(ev);
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape' || !taskViewId) return;
+      var others = document.querySelectorAll('.modal-backdrop.open:not(#task-modal)');
+      if (!others.length) closeTaskView();
+    });
 
     function toggleCard(head) {
       var card = head.closest('.card');
@@ -1055,7 +1159,7 @@
     }
 
     // Remember which history panels are open so a refresh doesn't close them.
-    document.getElementById('board').addEventListener('toggle', function (ev) {
+    document.addEventListener('toggle', function (ev) {
       var d = ev.target;
       if (!d.classList || !d.classList.contains('history')) return;
       var id = d.getAttribute('data-id');
@@ -1063,17 +1167,28 @@
     }, true);
 
     document.getElementById('board').addEventListener('keydown', function (ev) {
+      if (ev.target.tagName === 'BUTTON') return;  // e.g. the ⤢ button: let it click normally
       var head = ev.target.closest && ev.target.closest('.card-head');
       if (head && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); toggleCard(head); }
     });
 
     document.getElementById('board').addEventListener('click', function (ev) {
+      var full = ev.target.closest('button[data-action="full"]');
+      if (full) { ev.stopPropagation(); openTaskView(full.getAttribute('data-id')); return; }
       var head = ev.target.closest('.card-head');
       if (head) { toggleCard(head); return; }
+      onTaskClick(ev);
+    });
+
+    // Buttons on a card or in the full view of a task.
+    function onTaskClick(ev) {
       var b = ev.target.closest('button[data-action]');
-      if (!b || busy) return;
+      if (!b) return;
       var id = b.getAttribute('data-id');
       var action = b.getAttribute('data-action');
+      if (action === 'closefull') { closeTaskView(); return; }
+      if (action === 'copylink') { copyTaskLink(id); return; }
+      if (busy) return;
       var label = b.textContent;
       if (action === 'claim') {
         call('claimTask', [id], { button: b, label: label, working: 'Volunteering…', done: 'You volunteered for this task.', onSuccess: renderBoard });
@@ -1103,9 +1218,11 @@
         var box = b.closest('details').querySelector('.note-input');
         var text = box.value.trim();
         if (!text) { showStatus('Type a note first.'); box.focus(); return; }
-        call('addNote', [id, text], { button: b, label: label, working: 'Saving note…', done: 'Note added.', onSuccess: renderBoard });
+        box.value = '';
+        call('addNote', [id, text], { button: b, label: label, working: 'Saving note…', done: 'Note added.', onSuccess: renderBoard,
+          onFailure: function () { box.value = text; } });
       }
-    });
+    }
 
     // ---- Add task ----
 
