@@ -370,6 +370,41 @@
     .mny-sort .mny-line:first-of-type { border-top: none; }
     .mny-foot { margin-top: 22px; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .mny-change { font-size: 12px; }
+    /* Money sub-tabs */
+    .mny-tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 14px; }
+    .mny-tabs button { border-radius: 100px; padding: 6px 14px; font-size: 13.5px; }
+    .mny-tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .mny-tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 100px; background: var(--amber); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+    .mny-tabs .mny-year { margin-left: auto; font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+    .mny-att { margin: 0; padding-left: 18px; font-size: 14px; }
+    .mny-att li { margin: 4px 0; }
+    .mny-search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    /* Invoices */
+    .inv-row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 92px 110px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
+    .inv-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; border-top: none; }
+    .inv-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+    details.inv-item > summary { list-style: none; cursor: pointer; }
+    details.inv-item > summary::-webkit-details-marker { display: none; }
+    details.inv-item > summary .name::before { content: '▸ '; color: var(--muted); font-size: 11px; }
+    details.inv-item[open] > summary .name::before { content: '▾ '; }
+    .inv-st { font-size: 11.5px; padding: 2px 8px; border-radius: 100px; background: #eef0ea; text-align: center; white-space: nowrap; }
+    .inv-st.enter { background: var(--amber-soft); color: var(--amber); }
+    .inv-st.unpaid, .inv-st.part { background: var(--red-soft); color: var(--red); }
+    .inv-st.paid { background: var(--accent-soft); color: var(--accent); }
+    .inv-body { padding: 8px 12px 12px 24px; background: #fbfbf9; border-top: 1px dashed var(--line); font-size: 13px; }
+    .inv-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; margin: 8px 0; }
+    .inv-form label { display: block; font-size: 12px; color: var(--muted); }
+    .inv-form input, .inv-form textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 13px; }
+    .inv-form .wide { grid-column: 1 / -1; }
+    .inv-pay { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 4px 0; }
+    .inv-pay select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; }
+    .inv-sugg { background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+    @media (max-width: 600px) {
+      .inv-row { grid-template-columns: minmax(0, 1fr) 84px 104px; }
+      .inv-st { white-space: normal; display: inline-block; line-height: 1.3; }
+      .inv-row .dt { display: none; }
+      .inv-body { padding-left: 12px; }
+    }
     /* Sinking fund plan */
     .plan-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 92px 92px 82px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
     .plan-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; border-top: none; }
@@ -1528,75 +1563,292 @@
       var unsortedOut = curTx.filter(function (t) { return !t.category && t.amount < 0; })
         .reduce(function (a, t) { return a - t.amount; }, 0);
 
-      var h = [];
-      if (m.years.length > 1) {
-        h.push('<p><select onchange="moneyYear=this.value;money=null;loadMoney()">' + m.years.map(function (y) {
+      var tab = MONEY_TABS.indexOf(moneyTab) === -1 ? 'overview' : moneyTab;
+      var invoices = m.invoices || [];
+      var invState = function (inv) {
+        if (inv.status === 'Not an invoice') return 'ignored';
+        if (inv.status !== 'Entered' || inv.total == null) return 'enter';
+        var due = Math.round((inv.total - (inv.paid || 0)) * 100) / 100;
+        if (due <= 0.009) return 'paid';
+        return inv.paid > 0 ? 'part' : 'unpaid';
+      };
+      var toEnter = invoices.filter(function (i) { return invState(i) === 'enter'; });
+      var owing = invoices.filter(function (i) { var st = invState(i); return st === 'unpaid' || st === 'part'; });
+      var owingTotal = owing.reduce(function (a, i) { return a + (i.total - (i.paid || 0)); }, 0);
+      var pt = planTotals(m, sink.balance || 0);
+
+      // Sub-tab buttons
+      var nav = '<nav class="mny-tabs">' + [
+        ['overview', 'Overview', 0], ['running', 'Running costs', toSort.length], ['fund', 'Sinking fund', 0], ['invoices', 'Invoices', toEnter.length]
+      ].map(function (t) {
+        return '<button data-mtab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] +
+          (t[2] ? ' <span class="badge">' + t[2] + '</span>' : '') + '</button>';
+      }).join('') + (m.years.length > 1 ? '<select class="mny-year" onchange="moneyYear=this.value;money=null;loadMoney()">' + m.years.map(function (y) {
           return '<option' + (String(y) === String(m.year) ? ' selected' : '') + '>' + y + '</option>';
-        }).join('') + '</select></p>');
+        }).join('') + '</select>' : '') + '</nav>';
+
+      var h = [];
+      if (tab === 'overview') {
+        h.push('<div class="mny-cards">');
+        h.push('<div class="mny-card"><div class="lbl">Current account</div><div class="big">' + (cur.balance === null ? '—' : eur(cur.balance)) +
+          '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
+        h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
+          '</div><div class="sub">' + (sink.asOf ? (asOf && sink.asOf < asOf ? 'statement to ' + escapeHtml(fmtDay(asOf)) + ' · no change since ' + escapeHtml(fmtDay(sink.asOf)) : 'at ' + escapeHtml(fmtDay(sink.asOf))) : 'no statements yet') + '</div></div>');
+        var pctSpent = budgetTotal ? Math.round(spentTotal / budgetTotal * 100) : 0;
+        h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
+          '</div><div class="sub">' + pctSpent + '% of the ' + eur(budgetTotal) + ' budget' +
+          (thisYear ? ' · ' + Math.round(progress * 100) + '% of the year gone' : '') + '</div></div>');
+        var expected = m.expectedIncome != null ? m.expectedIncome : budgetTotal;
+        h.push('<div class="mny-card"><div class="lbl">Service charges in</div><div class="big">' + eur(income) +
+          '</div><div class="sub">' + (expected ? Math.round(income / expected * 100) + '% of ' + eur(expected) + ' expected this year' : '') +
+          (m.expectedIncome != null && m.expectedIncome !== budgetTotal ? ' (' + eur(budgetTotal - m.expectedIncome) + ' was paid in advance)' : '') + '</div></div>');
+        h.push('<div class="mny-card' + (pt.left < 0 ? ' warn' : '') + '"><div class="lbl">Sinking fund after planned work</div><div class="big' + (pt.left < 0 ? ' neg' : '') + '">' + eur(pt.left) +
+          '</div><div class="sub">' + (pt.noEst ? pt.noEst + ' planned item' + (pt.noEst === 1 ? '' : 's') + ' not yet costed' : 'all planned items costed') + '</div></div>');
+        h.push('</div>');
+        // Needs attention
+        var att = [];
+        if (toSort.length) att.push(['running', toSort.length + ' payment' + (toSort.length === 1 ? '' : 's') + ' to sort into a category (' + eur(unsortedOut) + ')']);
+        var over = rows.filter(function (r) { return r.spent > r.budget + 0.5; });
+        if (over.length) att.push(['running', 'Over budget: ' + over.map(function (r) { return escapeHtml(r.name) + ' (' + eur(r.spent) + ' of ' + eur(r.budget) + ')'; }).join(', ')]);
+        if (toEnter.length) att.push(['invoices', toEnter.length + ' invoice' + (toEnter.length === 1 ? '' : 's') + ' to enter']);
+        if (owing.length) att.push(['invoices', owing.length + ' invoice' + (owing.length === 1 ? '' : 's') + ' not fully paid (' + eur(owingTotal, true) + ' outstanding)']);
+        if (pt.noEst) att.push(['fund', pt.noEst + ' sinking fund item' + (pt.noEst === 1 ? '' : 's') + ' with no estimate yet']);
+        h.push('<h2>Needs attention</h2>');
+        h.push(att.length ? '<ul class="mny-att">' + att.map(function (a) {
+          return '<li><button class="link" data-mtab="' + a[0] + '">' + a[1] + '</button></li>';
+        }).join('') + '</ul>' : '<p class="hint">Nothing at the moment.</p>');
+      } else if (tab === 'running') {
+        h.push('<div class="mny-search"><input id="mny-q" type="search" placeholder="Search payments: a name, an amount…" value="' + escapeHtml(moneyQuery) + '"><div id="mny-results"></div></div>');
+        if (toSort.length) {
+          h.push('<h2>To sort (' + toSort.length + ')</h2><div class="mny-sort">' +
+            '<p class="hint" style="margin:4px 0 6px">Pick a category for each payment. With “always” ticked, the Desk will sort that payee by itself from now on.</p>' +
+            toSort.map(function (t) { return moneyLineHtml(t, { sort: true }); }).join('') + '</div>');
+        }
+        h.push('<h2>Spending against the ' + m.year + ' budget</h2><div class="mny-table">');
+        h.push('<div class="mny-row head"><span>Category</span><span class="num">Budget</span><span class="num">Spent</span><span class="barcell">' +
+          (thisYear ? '│ = where we are in the year' : '') + '</span></div>');
+        rows.forEach(function (r) {
+          var pct = r.budget ? r.spent / r.budget : (r.spent ? 2 : 0);
+          var over = r.spent > r.budget + 0.5;
+          var bar = '<div class="mny-bar"><span class="' + (over ? 'over' : '') + '" style="width:' + Math.min(100, Math.max(0, pct * 100)) + '%"></span>' +
+            (thisYear ? '<i style="left:' + (progress * 100) + '%"></i>' : '') + '</div>';
+          var row = '<span class="name">' + escapeHtml(r.name) + '</span><span class="num">' + eur(r.budget) + '</span>' +
+            '<span class="num' + (over ? ' over' : '') + '">' + eur(r.spent) + '</span><span class="barcell">' + bar + '</span>';
+          if (!r.lines.length) { h.push('<div class="mny-row">' + row + '</div>'); return; }
+          h.push('<details class="mny-cat" data-cat="' + escapeHtml(r.name) + '"' + (moneyOpen[r.name] ? ' open' : '') + '><summary class="mny-row">' + row + '</summary>' +
+            '<div class="mny-lines">' + r.lines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details>');
+        });
+        h.push('<div class="mny-row total"><span>Total</span><span class="num">' + eur(budgetTotal) + '</span><span class="num">' + eur(spentTotal) + '</span><span class="barcell"></span></div>');
+        h.push('</div>');
+        h.push('<h2>Money in</h2><div class="mny-table"><details class="mny-cat" data-cat="__in"' + (moneyOpen.__in ? ' open' : '') + '><summary class="mny-row">' +
+          '<span class="name">Service charges and other income</span><span class="num"></span><span class="num">' + eur(income) + '</span><span class="barcell"></span></summary>' +
+          '<div class="mny-lines">' + incomeLines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details></div>');
+      } else if (tab === 'fund') {
+        var sinkIn = sinkTx.filter(function (t) { return t.amount > 0; }).reduce(function (a, t) { return a + t.amount; }, 0);
+        var sinkOut = sinkTx.filter(function (t) { return t.amount < 0; }).reduce(function (a, t) { return a - t.amount; }, 0);
+        h.push('<div class="mny-cards"><div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
+          '</div><div class="sub">statement to ' + escapeHtml(fmtDay(asOf)) + '</div></div>' +
+          '<div class="mny-card"><div class="lbl">In ' + m.year + '</div><div class="big">' + eur(sinkIn) + '</div><div class="sub">transfers and interest</div></div>' +
+          '<div class="mny-card"><div class="lbl">Out ' + m.year + '</div><div class="big">' + eur(sinkOut) + '</div><div class="sub">works paid from the fund</div></div></div>');
+        h.push('<div class="mny-table" style="margin-top:10px"><details class="mny-cat" data-cat="__sink"' + (moneyOpen.__sink ? ' open' : '') + '><summary class="mny-row">' +
+          '<span class="name">Sinking fund payments in ' + m.year + '</span><span class="num"></span><span class="num">' + eur(sinkIn - sinkOut) + '</span><span class="barcell"></span></summary>' +
+          '<div class="mny-lines">' + sinkTx.slice().reverse().map(function (t) {
+            var p = t.plan && (m.plan || []).filter(function (x) { return x.id === t.plan; })[0];
+            return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(p ? p.name : (t.category || 'to sort')) + '</span></span><span class="num');
+          }).join('') + '</div></details></div>');
+        h.push(planHtml(m, sink));
+      } else {
+        h.push(invoicesHtml(m, invState));
       }
-      h.push('<div class="mny-cards">');
-      h.push('<div class="mny-card"><div class="lbl">Current account</div><div class="big">' + (cur.balance === null ? '—' : eur(cur.balance)) +
-        '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
-      h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
-        '</div><div class="sub">' + (sink.asOf ? (asOf && sink.asOf < asOf ? 'statement to ' + escapeHtml(fmtDay(asOf)) + ' · no change since ' + escapeHtml(fmtDay(sink.asOf)) : 'at ' + escapeHtml(fmtDay(sink.asOf))) : 'no statements yet') + '</div></div>');
-      var pctSpent = budgetTotal ? Math.round(spentTotal / budgetTotal * 100) : 0;
-      h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
-        '</div><div class="sub">' + pctSpent + '% of the ' + eur(budgetTotal) + ' budget' +
-        (thisYear ? ' · ' + Math.round(progress * 100) + '% of the year gone' : '') + '</div></div>');
-      var expected = m.expectedIncome != null ? m.expectedIncome : budgetTotal;
-      h.push('<div class="mny-card"><div class="lbl">Service charges in</div><div class="big">' + eur(income) +
-        '</div><div class="sub">' + (expected ? Math.round(income / expected * 100) + '% of ' + eur(expected) + ' expected this year' : '') +
-        (m.expectedIncome != null && m.expectedIncome !== budgetTotal ? ' (' + eur(budgetTotal - m.expectedIncome) + ' was paid in advance)' : '') + '</div></div>');
-      if (toSort.length) {
-        h.push('<div class="mny-card warn"><div class="lbl">To sort</div><div class="big">' + toSort.length +
-          '</div><div class="sub">' + eur(unsortedOut) + ' not yet in a category</div></div>');
-      }
-      h.push('</div>');
-
-      if (toSort.length) {
-        h.push('<h2>To sort (' + toSort.length + ')</h2><div class="mny-sort">' +
-          '<p class="hint" style="margin:4px 0 6px">Pick a category for each payment. With “always” ticked, the Desk will sort that payee by itself from now on.</p>' +
-          toSort.map(function (t) { return moneyLineHtml(t, { sort: true }); }).join('') + '</div>');
-      }
-
-      h.push('<h2>Spending against the ' + m.year + ' budget</h2><div class="mny-table">');
-      h.push('<div class="mny-row head"><span>Category</span><span class="num">Budget</span><span class="num">Spent</span><span class="barcell">' +
-        (thisYear ? '│ = where we are in the year' : '') + '</span></div>');
-      rows.forEach(function (r) {
-        var pct = r.budget ? r.spent / r.budget : (r.spent ? 2 : 0);
-        var over = r.spent > r.budget + 0.5;
-        var bar = '<div class="mny-bar"><span class="' + (over ? 'over' : '') + '" style="width:' + Math.min(100, pct * 100) + '%"></span>' +
-          (thisYear ? '<i style="left:' + (progress * 100) + '%"></i>' : '') + '</div>';
-        var row = '<span class="name">' + escapeHtml(r.name) + '</span><span class="num">' + eur(r.budget) + '</span>' +
-          '<span class="num' + (over ? ' over' : '') + '">' + eur(r.spent) + '</span><span class="barcell">' + bar + '</span>';
-        if (!r.lines.length) { h.push('<div class="mny-row">' + row + '</div>'); return; }
-        h.push('<details class="mny-cat" data-cat="' + escapeHtml(r.name) + '"' + (moneyOpen[r.name] ? ' open' : '') + '><summary class="mny-row">' + row + '</summary>' +
-          '<div class="mny-lines">' + r.lines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details>');
-      });
-      h.push('<div class="mny-row total"><span>Total</span><span class="num">' + eur(budgetTotal) + '</span><span class="num">' + eur(spentTotal) + '</span><span class="barcell"></span></div>');
-      h.push('</div>');
-
-      h.push('<h2>Money in</h2><div class="mny-table"><details class="mny-cat" data-cat="__in"' + (moneyOpen.__in ? ' open' : '') + '><summary class="mny-row">' +
-        '<span class="name">Service charges and other income</span><span class="num"></span><span class="num">' + eur(income) + '</span><span class="barcell"></span></summary>' +
-        '<div class="mny-lines">' + incomeLines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details></div>');
-
-      var sinkIn = sinkTx.filter(function (t) { return t.amount > 0; }).reduce(function (a, t) { return a + t.amount; }, 0);
-      var sinkOut = sinkTx.filter(function (t) { return t.amount < 0; }).reduce(function (a, t) { return a - t.amount; }, 0);
-      h.push('<h2>Sinking fund in ' + m.year + '</h2><div class="mny-table"><details class="mny-cat" data-cat="__sink"' + (moneyOpen.__sink ? ' open' : '') + '><summary class="mny-row">' +
-        '<span class="name">In ' + eur(sinkIn) + ' · out ' + eur(sinkOut) + '</span><span class="num"></span><span class="num">' + eur(sinkIn - sinkOut) + '</span><span class="barcell"></span></summary>' +
-        '<div class="mny-lines">' + sinkTx.slice().reverse().map(function (t) {
-          return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(t.category || 'to sort') + '</span></span><span class="num');
-        }).join('') + '</div></details></div>');
-
-      h.push(planHtml(m, sink));
-
       h.push('<div class="mny-foot"><span>Statements to ' + (asOf ? escapeHtml(fmtDay(asOf)) : '—') +
         (m.lastImport ? ' · last checked ' + escapeHtml(m.lastImport) : '') +
-        '. To add statements, email the bank’s CSV files to <b>accounts@st-helens.ie</b>.</span>' +
-        '<button data-mact="import">Check for new statements</button></div>');
-      el.innerHTML = h.join('');
+        '. Email bank CSVs and invoices to <b>accounts@st-helens.ie</b>.</span>' +
+        '<button data-mact="import">Check accounts@ now</button></div>');
+      el.innerHTML = nav + h.join('');
+      if (tab === 'running') { renderMoneySearch(); var q = document.getElementById('mny-q'); q.addEventListener('input', function () { moneyQuery = q.value; renderMoneySearch(); }); }
     }
+    // Which Money sub-tab is showing: remembered on the device, and settable with ?tab= in a link.
+    var MONEY_TABS = ['overview', 'running', 'fund', 'invoices'];
+    var moneyTab = (function () {
+      var q = ''; try { q = new URLSearchParams(location.search).get('tab') || ''; } catch (e) {}
+      return MONEY_TABS.indexOf(q) !== -1 ? q : readStore('stHelensMoneyTab', 'overview');
+    })();
+    var moneyQuery = '';
+    function setMoneyTab(t) {
+      moneyTab = t; writeStore('stHelensMoneyTab', t);
+      try { if (/st-helens\.ie$/.test(location.hostname)) history.replaceState(null, '', location.pathname + '?view=money&tab=' + t); } catch (e) {}
+      if (money) renderMoney(money);
+      window.scrollTo(0, 0);
+    }
+    function renderMoneySearch() {
+      var box = document.getElementById('mny-results');
+      if (!box) return;
+      var q = moneyQuery.trim().toLowerCase().replace(/[€,]/g, '');
+      if (q.length < 2) { box.innerHTML = ''; return; }
+      var hits = money.txns.filter(function (t) {
+        return String(t.details).toLowerCase().indexOf(q) !== -1 || String(t.category || '').toLowerCase().indexOf(q) !== -1 ||
+          Math.abs(t.amount).toFixed(2).indexOf(q) === 0;
+      });
+      var total = hits.reduce(function (a, t) { return a + t.amount; }, 0);
+      box.innerHTML = '<div class="mny-table" style="margin-top:8px"><div class="mny-lines" style="border-top:none">' +
+        (hits.length ? hits.slice().reverse().map(function (t) {
+          return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(t.category || 'to sort') + '</span></span><span class="num');
+        }).join('') + '<p class="hint" style="margin:6px 0 0">' + hits.length + ' payment' + (hits.length === 1 ? '' : 's') + ', net ' + eur(total, true) + '</p>'
+          : '<p class="hint">No payments match.</p>') + '</div></div>';
+    }
+    document.getElementById('money').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-mtab]');
+      if (b) { ev.preventDefault(); setMoneyTab(b.getAttribute('data-mtab')); }
+    });
+    // ---- Invoices ----
+    // Invoices come from accounts@ (PDFs and photos sent by a director) or the Upload button. A director
+    // opens each one, types in the details once, then matches the payment(s) that paid it.
+    var invOpen = {};
+    function invoicesHtml(m, invState) {
+      var invs = (m.invoices || []).slice().sort(function (a, b) { return String(b.date || b.received).localeCompare(String(a.date || a.received)); });
+      var groups = { enter: [], unpaid: [], part: [], paid: [], ignored: [] };
+      invs.forEach(function (i) { groups[invState(i)].push(i); });
+      var label = { enter: 'To enter', unpaid: 'Unpaid', part: 'Part paid', paid: 'Paid', ignored: 'Not an invoice' };
+      var h = [];
+      h.push('<p class="hint" style="margin:0 0 10px">Email invoices (PDF or photo) to <b>accounts@st-helens.ie</b>, or upload one here. Enter the details once, then match the payment that paid it.</p>');
+      h.push('<p><button data-iact="upload">+ Upload an invoice</button><input type="file" id="inv-file" accept="application/pdf,image/*" hidden></p>');
+      var section = function (title, list, openByDefault) {
+        if (!list.length) return;
+        h.push('<h2>' + title + ' (' + list.length + ')</h2><div class="mny-table">');
+        h.push('<div class="inv-row head"><span>Supplier</span><span class="dt">Date</span><span class="num">Total</span><span class="num">Status</span></div>');
+        list.forEach(function (i) { h.push(invoiceItemHtml(m, i, invState(i), label, openByDefault)); });
+        h.push('</div>');
+      };
+      section('To enter', groups.enter, true);
+      section('Not fully paid', groups.unpaid.concat(groups.part), false);
+      section('Paid', groups.paid, false);
+      section('Set aside (not invoices)', groups.ignored, false);
+      if (!invs.length) h.push('<p class="hint">No invoices yet.</p>');
+      // Payments with no invoice: outgoing payments to suppliers (not transfers, fees or insurance claims passed on).
+      var skip = /^(Transfer to sinking fund|Bank charges|Insurance claims \(passed on\)|Interest \(after DIRT\))$/;
+      var none = (m.unmatched || []).filter(function (t) { return !skip.test(t.category || ''); });
+      if (none.length) {
+        var tot = none.reduce(function (a, t) { return a - t.amount; }, 0);
+        h.push('<h2>Payments with no invoice (' + none.length + ')</h2><div class="mny-table"><details class="mny-cat" data-cat="__noinv"' + (moneyOpen.__noinv ? ' open' : '') + '><summary class="mny-row">' +
+          '<span class="name">Payments to suppliers not yet matched to an invoice</span><span class="num"></span><span class="num">' + eur(tot) + '</span><span class="barcell"></span></summary>' +
+          '<div class="mny-lines">' + none.slice().sort(function (a, b) { return b.date.localeCompare(a.date); }).map(function (t) {
+            return '<div class="mny-line"><span>' + escapeHtml(fmtDay(t.date)) + '</span><span class="det">' + escapeHtml(t.details) +
+              ' <span class="hint">· ' + escapeHtml(t.category || 'to sort') + '</span></span><span class="num">' + eur(t.amount, true) + '</span></div>';
+          }).join('') + '<p class="hint" style="margin:6px 0 0">Regular direct debits (Currans, electricity, waste, cleaning) often have no separate invoice; that’s fine.</p></div></details></div>');
+      }
+      return h.join('');
+    }
+    function invoiceItemHtml(m, i, st, label, openByDefault) {
+      var due = i.total != null ? Math.round((i.total - (i.paid || 0)) * 100) / 100 : null;
+      var stText = st === 'part' ? 'Part paid · ' + eur(due, true) + ' due' : label[st];
+      var name = i.supplier || i.fileName || 'Invoice';
+      var isOpen = invOpen[i.id] != null ? invOpen[i.id] : !!openByDefault;
+      var v = function (x) { return x == null ? '' : x; };
+      var body = '<div class="inv-body">' +
+        '<p><button data-iact="open" data-id="' + escapeHtml(i.id) + '">Open the invoice</button> <span class="hint">' + escapeHtml(i.fileName) +
+          ' · from ' + escapeHtml(i.from) + (i.received ? ', ' + escapeHtml(fmtDay(i.received)) : '') + '</span></p>' +
+        '<div class="inv-form" data-id="' + escapeHtml(i.id) + '">' +
+          '<div><label>Supplier</label><input data-f="supplier" maxlength="120" value="' + escapeHtml(v(i.supplier)) + '"></div>' +
+          '<div><label>Invoice number</label><input data-f="number" maxlength="60" value="' + escapeHtml(v(i.number)) + '"></div>' +
+          '<div><label>Invoice date</label><input data-f="date" type="date" value="' + escapeHtml(v(i.date)) + '"></div>' +
+          '<div><label>Net €</label><input data-f="net" inputmode="decimal" value="' + escapeHtml(v(i.net)) + '"></div>' +
+          '<div><label>VAT €</label><input data-f="vat" inputmode="decimal" value="' + escapeHtml(v(i.vat)) + '"></div>' +
+          '<div><label>Total € (to pay)</label><input data-f="total" inputmode="decimal" value="' + escapeHtml(v(i.total)) + '" placeholder="net + VAT"></div>' +
+          '<div class="wide"><label>Note</label><textarea data-f="note" maxlength="2000" rows="2">' + escapeHtml(v(i.note)) + '</textarea></div>' +
+        '</div>' +
+        '<div class="actions"><button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '">' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>' +
+          (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') + '</div>';
+      if (st !== 'enter' && st !== 'ignored') {
+        body += '<p style="margin-top:10px"><b>Paid:</b> ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) +
+          (due > 0.009 ? ' · <span class="neg">' + eur(due, true) + ' still to pay</span>' : '') + '</p>';
+        (i.payments || []).forEach(function (t) {
+          body += '<div class="inv-pay">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
+            ' <button class="link" data-iact="unmatch" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">unmatch</button></div>';
+        });
+        if (due > 0.009) {
+          var un = m.unmatched || [];
+          var near = function (a, b) { return Math.abs(Math.abs(a) - b) < 0.01; };
+          var after = i.date ? un.filter(function (t) { return t.date >= addDaysIso(i.date, -14); }) : un;
+          var sugg = after.filter(function (t) { return near(t.amount, due) || (i.net != null && near(t.amount, i.net)) || near(t.amount, i.total); }).slice(0, 3);
+          sugg.forEach(function (t) {
+            body += '<div class="inv-pay inv-sugg">Looks like a match: ' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
+              ' <button data-iact="match" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">Match</button></div>';
+          });
+          body += '<div class="inv-pay"><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Match another payment…</option>' +
+            after.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) + '</option>';
+            }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
+        }
+      }
+      if (i.history && i.history.length) {
+        body += '<details style="margin-top:6px"><summary class="hint">History (' + i.history.length + ')</summary>' + i.history.map(function (e) {
+          return '<p class="hint" style="margin:2px 0">' + escapeHtml(e.when) + ' · ' + escapeHtml(e.who) + ' · ' + escapeHtml(e.text) + '</p>';
+        }).join('') + '</details>';
+      }
+      body += '</div>';
+      return '<details class="inv-item" data-iid="' + escapeHtml(i.id) + '"' + (isOpen ? ' open' : '') + '><summary class="inv-row">' +
+        '<span class="name">' + escapeHtml(name) + (i.number ? ' <span class="hint">#' + escapeHtml(i.number) + '</span>' : '') + '</span>' +
+        '<span class="dt">' + (i.date ? escapeHtml(fmtDay(i.date)) : '—') + '</span>' +
+        '<span class="num">' + (i.total != null ? eur(i.total, true) : '—') + '</span>' +
+        '<span class="num"><span class="inv-st ' + st + '">' + escapeHtml(stText) + '</span></span></summary>' + body + '</details>';
+    }
+    function addDaysIso(iso, n) {
+      var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    document.getElementById('money').addEventListener('toggle', function (ev) {
+      var d = ev.target;
+      if (d.classList && d.classList.contains('inv-item')) invOpen[d.getAttribute('data-iid')] = d.open;
+    }, true);
+    document.getElementById('money').addEventListener('change', function (ev) {
+      if (ev.target.id !== 'inv-file') return;
+      var file = ev.target.files && ev.target.files[0];
+      ev.target.value = '';
+      if (!file) return;
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var mime = file.type || ({ pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic' })[ext] || '';
+      if (!/^(application\/pdf|image\/(jpeg|png|heic|heif|gif))$/.test(mime)) { showStatus('Upload the invoice as a PDF or a photo.'); return; }
+      if (file.size > 10 * 1048576) { showStatus('That file is too big (the limit is 10 MB).'); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var data = String(reader.result).split(',')[1] || '';
+        call('uploadInvoice', [{ name: file.name, mime: mime, data: data }, moneyYear], { working: 'Uploading ' + file.name + '…', done: 'Uploaded. Now fill in the details.',
+          onSuccess: function (m) { if (m.newInvoiceId) invOpen[m.newInvoiceId] = true; renderMoney(m); } });
+      };
+      reader.readAsDataURL(file);
+    });
+    document.getElementById('money').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-iact]');
+      if (!b || busy) return;
+      var act = b.getAttribute('data-iact'), id = b.getAttribute('data-id');
+      var opts = function (working, done) { return { button: b, label: b.textContent, working: working, done: done, onSuccess: renderMoney }; };
+      if (act === 'upload') { document.getElementById('inv-file').click(); }
+      else if (act === 'open') { openAttachment(id, 'Invoice', b, 'getInvoiceFile'); }
+      else if (act === 'save' || act === 'ignore') {
+        var form = document.querySelector('.inv-form[data-id="' + id + '"]');
+        var inv = { id: id, status: act === 'ignore' ? 'Not an invoice' : 'Entered' };
+        form.querySelectorAll('[data-f]').forEach(function (f) { inv[f.getAttribute('data-f')] = f.value.trim(); });
+        if (act === 'save' && (!inv.supplier || (!inv.total && !inv.net))) { showStatus('Fill in at least the supplier and the total.'); return; }
+        invOpen[id] = true;
+        call('saveInvoice', [inv, moneyYear], opts('Saving…', act === 'ignore' ? 'Set aside.' : 'Saved.'));
+      } else if (act === 'match') {
+        call('linkInvoicePayment', [id, b.getAttribute('data-t'), true, moneyYear], opts('Matching…', 'Matched.'));
+      } else if (act === 'matchpick') {
+        var sel = document.querySelector('select[data-ipick="' + id + '"]');
+        if (!sel.value) { showStatus('Choose a payment first.'); return; }
+        call('linkInvoicePayment', [id, sel.value, true, moneyYear], opts('Matching…', 'Matched.'));
+      } else if (act === 'unmatch') {
+        call('linkInvoicePayment', [id, b.getAttribute('data-t'), false, moneyYear], opts('Unmatching…', 'Unmatched.'));
+      }
+    });
+
     // ---- Sinking fund plan ----
+    function planTotals(m, bal) {
+      var open = (m.plan || []).filter(function (p) { return p.status !== 'Done'; });
+      var remaining = function (p) { return p.estimate == null ? 0 : Math.max(0, p.estimate - (p.spent || 0)); };
+      var sum = open.reduce(function (a, p) { return a + remaining(p); }, 0);
+      return { left: bal - sum, noEst: open.filter(function (p) { return p.estimate == null; }).length };
+    }
     function planHtml(m, sink) {
       var items = m.plan || [];
       var bal = sink.balance || 0;
@@ -1741,7 +1993,8 @@
             var errs = (r.files || []).filter(function (f) { return f.error; });
             setTimeout(function () {
               showStatus(errs.length ? 'Problem: ' + errs.map(function (f) { return f.name + ': ' + f.error; }).join('; ') :
-                (r.added ? r.added + ' new line' + (r.added === 1 ? '' : 's') + ' added.' : 'No new statements.'));
+                (r.added || r.invoicesAdded ? [r.added ? r.added + ' new bank line' + (r.added === 1 ? '' : 's') : '',
+                  r.invoicesAdded ? r.invoicesAdded + ' new invoice' + (r.invoicesAdded === 1 ? '' : 's') : ''].filter(Boolean).join(' and ') + ' added.' : 'Nothing new.'));
             }, 50);
           } });
       }
@@ -2013,7 +2266,7 @@
       Array.prototype.slice.call(e.target.files || []).forEach(uploadOne);
       e.target.value = '';
     });
-    function openAttachment(id, name, btn) {
+    function openAttachment(id, name, btn, fn) {
       // Open a tab straight away (while the tap still counts), then fill it once the file arrives.
       var w = null;
       try { w = window.open('', '_blank'); } catch (e) {}
@@ -2035,7 +2288,7 @@
           if (w && !w.closed) w.close();
           showStatus('Couldn’t open the attachment: ' + (err && err.message ? err.message : 'please try again.'));
         })
-        .getAttachment(KEY, id);
+        [fn || 'getAttachment'](KEY, id);
     }
     // Rich-text editor
     var rtSaved = null;
