@@ -399,6 +399,10 @@
     .inv-pay { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 4px 0; }
     .inv-pay select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; }
     .inv-sugg { background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+    .inv-paybox { border-left: 4px solid #b9b2a3; background: #f7f5f0; border-radius: 6px; padding: 8px 12px; margin: 8px 0 10px; }
+    .inv-paybox.ok { border-left-color: #2f7a55; background: #eaf4ee; }
+    .inv-paybox.warn { border-left-color: #b7791f; background: #fbf3e4; }
+    .inv-paybox > b:first-child { display: block; margin-bottom: 2px; }
     @media (max-width: 600px) {
       .inv-row { grid-template-columns: minmax(0, 1fr) 84px 104px; }
       .inv-row .dt { display: none; }
@@ -1759,6 +1763,7 @@
       var body = '<div class="inv-body">' +
         '<p><button data-iact="open" data-id="' + escapeHtml(i.id) + '">Open the invoice</button> <span class="hint">' + escapeHtml(i.fileName) +
           ' · from ' + escapeHtml(i.from) + (i.received ? ', ' + escapeHtml(fmtDay(i.received)) : '') + '</span></p>' +
+        paymentBoxHtml(m, i, st, due) +
         (checking ? '<p class="inv-sugg" style="margin:6px 0">Read automatically from the invoice' + (i.read && i.read.known ? ' (a supplier the Desk knows)' : '') +
           '. Check the figures against the invoice, fix anything that’s wrong, then click <b>Looks right</b>.</p>' : '') +
         (st === 'enter' && !checking && i.read ? '<p class="hint">The Desk couldn’t read the figures from this one, so please type them in.</p>' : '') +
@@ -1776,33 +1781,6 @@
             : '<button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '" data-needs-change="1" disabled>' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>') +
           (st === 'enter' ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">Try reading it again</button>' : '') +
           (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') + '</div>';
-      if (st !== 'enter' && st !== 'ignored') {
-        body += '<p style="margin-top:10px"><b>Paid:</b> ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) +
-          (due > 0.009 ? ' · <span class="neg">' + eur(due, true) + ' still to pay</span>' : '') + '</p>';
-        (i.payments || []).forEach(function (t) {
-          body += '<div class="inv-pay">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
-            ' <button class="link" data-iact="unmatch" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">unmatch</button></div>';
-        });
-        if (due > 0.009) {
-          var un = m.unmatched || [];
-          var near = function (a, b) { return Math.abs(Math.abs(a) - b) < 0.01; };
-          var after = i.date ? un.filter(function (t) { return t.date >= addDaysIso(i.date, -14); }) : un;
-          var sugg = after.filter(function (t) { return near(t.amount, due) || (i.net != null && near(t.amount, i.net)) || near(t.amount, i.total); }).slice(0, 3);
-          sugg.forEach(function (t) {
-            body += '<div class="inv-pay inv-sugg">Looks like a match: ' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
-              ' <button data-iact="match" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">Match</button></div>';
-          });
-          // Other payments that could plausibly cover what's still owed: no bigger than it, around or after the invoice date.
-          var fits = after.filter(function (t) { return -t.amount <= due + 0.01 && sugg.indexOf(t) === -1; });
-          if (fits.length) {
-            body += '<p><button class="link" data-iact="more" data-id="' + escapeHtml(i.id) + '">Match another payment…</button></p>' +
-              '<div class="inv-pay" data-more="' + escapeHtml(i.id) + '" hidden><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Choose a payment (up to ' + eur(due, true) + ')</option>' +
-              fits.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
-                return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) + '</option>';
-              }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
-          }
-        }
-      }
       if (i.history && i.history.length) {
         body += '<details style="margin-top:6px"><summary class="hint">History (' + i.history.length + ')</summary>' + i.history.map(function (e) {
           return '<p class="hint" style="margin:2px 0">' + escapeHtml(e.when) + ' · ' + escapeHtml(e.who) + ' · ' + escapeHtml(e.text) + '</p>';
@@ -1814,6 +1792,48 @@
         '<span class="dt">' + (i.date ? escapeHtml(fmtDay(i.date)) : '—') + '</span>' +
         '<span class="num">' + (i.total != null ? eur(i.total, true) : '—') + '</span>' +
         '<span class="num"><span class="inv-st ' + st + '">' + escapeHtml(stText) + '</span></span></summary>' + body + '</details>';
+    }
+    // "Payment" box at the top of an invoice: is it matched to the bank, and to what?
+    function paymentBoxHtml(m, i, st, due) {
+      if (st === 'ignored') return '';
+      var line = function (t) { return escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true); };
+      var un = m.unmatched || [];
+      var near = function (a, b) { return b != null && Math.abs(Math.abs(a) - b) < 0.01; };
+      var after = i.date ? un.filter(function (t) { return t.date >= addDaysIso(i.date, -14) && t.date <= addDaysIso(i.date, 180); }) : un;
+      if (st === 'enter') {
+        if (i.total == null) return '';
+        var c = after.filter(function (t) { return near(t.amount, i.total) || near(t.amount, i.net); });
+        return '<div class="inv-paybox"><b>Payment: not matched yet</b>' +
+          (c.length === 1 ? 'The bank statements show a likely payment: ' + line(c[0]) + '. It will be matched automatically when you ' + (i.status === 'To check' ? 'click <b>Looks right</b>' : 'save the details') + '.'
+           : c.length > 1 ? c.length + ' payments in the bank statements could fit; you’ll be able to pick the right one after you ' + (i.status === 'To check' ? 'click <b>Looks right</b>' : 'save the details') + '.'
+           : 'No payment of ' + eur(i.total, true) + ' in the bank statements yet (around the invoice date).') + '</div>';
+      }
+      var h = '';
+      if (st === 'paid') h = '<div class="inv-paybox ok"><b>✓ Paid in full and matched to the bank</b>';
+      else if (st === 'part') h = '<div class="inv-paybox warn"><b>Part paid: ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) + ' matched · <span class="neg">' + eur(due, true) + ' still to pay</span></b>';
+      else h = '<div class="inv-paybox warn"><b>Not paid yet: no bank payment matched</b>';
+      (i.payments || []).forEach(function (t) {
+        h += '<div class="inv-pay">Matched: ' + line(t) + ' <button class="link" data-iact="unmatch" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">unmatch</button></div>';
+      });
+      if (due > 0.009) {
+        var sugg = after.filter(function (t) { return near(t.amount, due) || (!(i.paid > 0) && near(t.amount, i.net)) || near(t.amount, i.total); }).slice(0, 3);
+        sugg.forEach(function (t) {
+          h += '<div class="inv-pay inv-sugg">Looks like a match: ' + line(t) +
+            ' <button data-iact="match" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">Match</button></div>';
+        });
+        // Other payments that could plausibly cover what's still owed: no bigger than it, around or after the invoice date.
+        var fits = after.filter(function (t) { return -t.amount <= due + 0.01 && sugg.indexOf(t) === -1; });
+        if (fits.length) {
+          h += '<p style="margin:4px 0 0"><button class="link" data-iact="more" data-id="' + escapeHtml(i.id) + '">Match another payment…</button></p>' +
+            '<div class="inv-pay" data-more="' + escapeHtml(i.id) + '" hidden><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Choose a payment (up to ' + eur(due, true) + ')</option>' +
+            fits.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '">' + line(t) + '</option>';
+            }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
+        } else if (!sugg.length) {
+          h += '<p class="hint" style="margin:4px 0 0">No unmatched payment in the bank statements fits this yet.</p>';
+        }
+      }
+      return h + '</div>';
     }
     function addDaysIso(iso, n) {
       var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
