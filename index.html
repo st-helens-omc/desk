@@ -333,6 +333,50 @@
     .views .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: #b00020; color: #fff; font-size: 11.5px; line-height: 18px; text-align: center; }
     /* Messages */
     #messages { padding: 20px; max-width: 760px; }
+    /* Money tab */
+    #money { padding: 20px; max-width: 860px; }
+    #money h2 { font-size: 15px; margin: 26px 0 8px; }
+    .mny-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .mny-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+    .mny-card .lbl { font-size: 12px; color: var(--muted); }
+    .mny-card .big { font-size: 22px; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
+    .mny-card .sub { font-size: 12px; color: var(--muted); }
+    .mny-card.warn { border-color: var(--amber); background: var(--amber-soft); }
+    .mny-table { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .mny-row { display: grid; grid-template-columns: minmax(0, 1fr) 82px 82px 120px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
+    .mny-row:first-child { border-top: none; }
+    .mny-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; }
+    .mny-row.total { font-weight: 700; background: #f7f8f5; }
+    .mny-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .mny-row .over { color: var(--red); font-weight: 600; }
+    details.mny-cat > summary { list-style: none; cursor: pointer; }
+    details.mny-cat > summary::-webkit-details-marker { display: none; }
+    details.mny-cat > summary .name::before { content: '▸ '; color: var(--muted); font-size: 11px; }
+    details.mny-cat[open] > summary .name::before { content: '▾ '; }
+    .mny-bar { position: relative; height: 8px; background: #eef0ea; border-radius: 4px; }
+    .mny-bar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--accent); }
+    .mny-bar span.over { background: var(--red); }
+    .mny-bar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .45; }
+    .mny-lines { padding: 4px 12px 10px 24px; background: #fbfbf9; border-top: 1px dashed var(--line); }
+    .mny-line { display: grid; grid-template-columns: 74px minmax(0, 1fr) 90px; gap: 8px; padding: 5px 0; font-size: 13px; align-items: center; }
+    .mny-line .det { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mny-line .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .mny-line .num.in { color: var(--accent); }
+    .mny-line .act { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .mny-line select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; }
+    .mny-line label { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+    .mny-sort { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 10px; padding: 8px 12px; }
+    .mny-sort .mny-line { border-top: 1px solid rgba(150,99,31,.25); padding: 8px 0; }
+    .mny-sort .mny-line:first-of-type { border-top: none; }
+    .mny-foot { margin-top: 22px; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .mny-change { font-size: 12px; }
+    @media (max-width: 600px) {
+      #money { padding: 14px; }
+      .mny-row { grid-template-columns: minmax(0, 1fr) 70px 74px; }
+      .mny-row .barcell { grid-column: 1 / 4; }
+      .mny-row.head .barcell { display: none; }
+      .mny-lines { padding-left: 12px; }
+    }
     #messages h2 { font-size: 15px; margin: 22px 0 8px; }
     #messages h2:first-child { margin-top: 0; }
     .msg-intro { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 6px; }
@@ -423,6 +467,7 @@
   <nav class="views" id="views" hidden>
     <button id="view-tasks" class="on" onclick="showView('tasks')">Tasks</button>
     <button id="view-messages" onclick="showView('messages')">Messages <span class="badge" id="msg-badge" hidden></span></button>
+    <button id="view-money" onclick="showView('money')">Money</button>
   </nav>
 
   <!-- Sign-in screen (shown when this browser isn't signed in yet) -->
@@ -590,6 +635,10 @@
   <div id="messages" hidden>
     <p class="msg-intro">Messages to the residents' groups go out from the St Helens admin account as <b>The Directors, St Helens OMC</b>, and replies come back to all the directors. Announcements and Owners need another director's approval. Every message waits a few minutes after it's released, so anyone can still cancel it, and the directors get a copy.</p>
     <div id="msg-lists"><p class="msg-empty">Loading…</p></div>
+  </div>
+
+  <div id="money" hidden>
+    <div id="money-body"><p class="msg-empty">Loading…</p></div>
   </div>
 
   <!-- Compose / edit a message -->
@@ -1340,12 +1389,188 @@
       currentView = v;
       document.getElementById('board').hidden = v !== 'tasks';
       document.getElementById('messages').hidden = v !== 'messages';
+      document.getElementById('money').hidden = v !== 'money';
+      document.getElementById('view-money').classList.toggle('on', v === 'money');
+      if (v === 'money') loadMoney();
       document.getElementById('add-btn').hidden = v !== 'tasks';
       document.getElementById('new-msg-btn').hidden = v !== 'messages';
       document.getElementById('view-tasks').classList.toggle('on', v === 'tasks');
       document.getElementById('view-messages').classList.toggle('on', v === 'messages');
       if (v === 'messages') loadMessages();
     }
+
+    // ---- Money ----
+    // Bank statements emailed to accounts@ are loaded into the Desk; lines are sorted into the
+    // budget headings by rules, and anything new is left in "To sort" for a director.
+    var money = null, moneyYear = 0, moneyOpen = {};
+    function eur(n, cents) {
+      var v = Math.abs(Number(n) || 0);
+      var s = v.toLocaleString('en-IE', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+      return (Number(n) < 0 ? '−' : '') + '€' + s;
+    }
+    function loadMoney() {
+      if (!money) document.getElementById('money-body').innerHTML = '<p class="msg-empty">Loading…</p>';
+      google.script.run
+        .withSuccessHandler(renderMoney)
+        .withFailureHandler(function (err) {
+          document.getElementById('money-body').innerHTML = '<p class="msg-empty">Couldn’t load the money figures: ' + escapeHtml(err && err.message) + '</p>';
+        })
+        .getMoney(KEY, moneyYear);
+    }
+    function moneyLineHtml(t, opts) {
+      var sel = '<select data-mact="cat" data-id="' + escapeHtml(t.id) + '">' +
+        (t.category ? '' : '<option value="">Choose a category…</option>') +
+        money.categories.map(function (c) {
+          return '<option' + (c === t.category ? ' selected' : '') + '>' + escapeHtml(c) + '</option>';
+        }).join('') + '</select>';
+      var act = '';
+      if (opts.sort) {
+        act = '<div class="act">' + sel +
+          '<label><input type="checkbox" data-mact="remember" checked> always for this payee</label>' +
+          '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
+      } else if (opts.change) {
+        act = '<div class="act" hidden>' + sel + '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
+      }
+      return '<div class="mny-line" data-id="' + escapeHtml(t.id) + '">' +
+        '<span>' + escapeHtml(fmtDay(t.date)) + '</span>' +
+        '<span class="det" title="' + escapeHtml(t.details) + '">' + escapeHtml(t.details) +
+          (opts.change ? ' <button class="link mny-change" data-mact="change">change</button>' : '') + '</span>' +
+        '<span class="num' + (t.amount > 0 ? ' in' : '') + '">' + eur(t.amount, true) + '</span>' + act + '</div>';
+    }
+    function renderMoney(m) {
+      money = m;
+      moneyYear = m.year;
+      var el = document.getElementById('money-body');
+      var cur = m.accounts[0], sink = m.accounts[1];
+      var asOf = cur.asOf || sink.asOf || '';
+      var thisYear = String(m.year) === String(new Date().getFullYear());
+      var progress = 1;
+      if (asOf && thisYear) {
+        var d = new Date(asOf + 'T12:00:00'), start = new Date(m.year + '-01-01T00:00:00');
+        progress = Math.min(1, (d - start) / (365 * 864e5));
+      }
+      var curTx = m.txns.filter(function (t) { return t.account === 'Current account'; });
+      var sinkTx = m.txns.filter(function (t) { return t.account === 'Sinking fund'; });
+      var toSort = m.txns.filter(function (t) { return !t.category; });
+      var spentBy = {}, linesBy = {};
+      curTx.forEach(function (t) {
+        if (!t.category) return;
+        spentBy[t.category] = (spentBy[t.category] || 0) - t.amount;
+        (linesBy[t.category] = linesBy[t.category] || []).push(t);
+      });
+      var budgetTotal = 0, spentTotal = 0;
+      var rows = m.budget.map(function (b) {
+        var spent = spentBy[b.name] || 0;
+        budgetTotal += b.budget; spentTotal += spent;
+        return { name: b.name, budget: b.budget, spent: spent, lines: linesBy[b.name] || [] };
+      });
+      // Spending in categories outside the budget (e.g. a line sorted as "Other income" by mistake).
+      Object.keys(spentBy).forEach(function (c) {
+        if (m.budget.some(function (b) { return b.name === c; }) || c === 'Service charges' || c === 'Other income') return;
+        rows.push({ name: c, budget: 0, spent: spentBy[c], lines: linesBy[c] }); spentTotal += spentBy[c];
+      });
+      var income = -(spentBy['Service charges'] || 0) - (spentBy['Other income'] || 0);
+      var incomeLines = (linesBy['Service charges'] || []).concat(linesBy['Other income'] || []);
+      var unsortedOut = curTx.filter(function (t) { return !t.category && t.amount < 0; })
+        .reduce(function (a, t) { return a - t.amount; }, 0);
+
+      var h = [];
+      if (m.years.length > 1) {
+        h.push('<p><select onchange="moneyYear=this.value;money=null;loadMoney()">' + m.years.map(function (y) {
+          return '<option' + (String(y) === String(m.year) ? ' selected' : '') + '>' + y + '</option>';
+        }).join('') + '</select></p>');
+      }
+      h.push('<div class="mny-cards">');
+      h.push('<div class="mny-card"><div class="lbl">Current account</div><div class="big">' + (cur.balance === null ? '—' : eur(cur.balance)) +
+        '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
+      h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
+        '</div><div class="sub">' + (sink.asOf ? 'at ' + escapeHtml(fmtDay(sink.asOf)) : 'no statements yet') + '</div></div>');
+      h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
+        '</div><div class="sub">of ' + eur(budgetTotal) + ' budget' + (thisYear ? ' · ' + Math.round(progress * 100) + '% of the year gone' : '') + '</div></div>');
+      h.push('<div class="mny-card"><div class="lbl">Service charges in</div><div class="big">' + eur(income) +
+        '</div><div class="sub">expected ' + eur(budgetTotal) + ' for the year</div></div>');
+      if (toSort.length) {
+        h.push('<div class="mny-card warn"><div class="lbl">To sort</div><div class="big">' + toSort.length +
+          '</div><div class="sub">' + eur(unsortedOut) + ' not yet in a category</div></div>');
+      }
+      h.push('</div>');
+
+      if (toSort.length) {
+        h.push('<h2>To sort (' + toSort.length + ')</h2><div class="mny-sort">' +
+          '<p class="hint" style="margin:4px 0 6px">Pick a category for each payment. With “always” ticked, the Desk will sort that payee by itself from now on.</p>' +
+          toSort.map(function (t) { return moneyLineHtml(t, { sort: true }); }).join('') + '</div>');
+      }
+
+      h.push('<h2>Spending against the ' + m.year + ' budget</h2><div class="mny-table">');
+      h.push('<div class="mny-row head"><span>Category</span><span class="num">Budget</span><span class="num">Spent</span><span class="barcell">' +
+        (thisYear ? '│ = where we are in the year' : '') + '</span></div>');
+      rows.forEach(function (r) {
+        var pct = r.budget ? r.spent / r.budget : (r.spent ? 2 : 0);
+        var over = r.spent > r.budget + 0.5;
+        var bar = '<div class="mny-bar"><span class="' + (over ? 'over' : '') + '" style="width:' + Math.min(100, pct * 100) + '%"></span>' +
+          (thisYear ? '<i style="left:' + (progress * 100) + '%"></i>' : '') + '</div>';
+        var row = '<span class="name">' + escapeHtml(r.name) + '</span><span class="num">' + eur(r.budget) + '</span>' +
+          '<span class="num' + (over ? ' over' : '') + '">' + eur(r.spent) + '</span><span class="barcell">' + bar + '</span>';
+        if (!r.lines.length) { h.push('<div class="mny-row">' + row + '</div>'); return; }
+        h.push('<details class="mny-cat" data-cat="' + escapeHtml(r.name) + '"' + (moneyOpen[r.name] ? ' open' : '') + '><summary class="mny-row">' + row + '</summary>' +
+          '<div class="mny-lines">' + r.lines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details>');
+      });
+      h.push('<div class="mny-row total"><span>Total</span><span class="num">' + eur(budgetTotal) + '</span><span class="num">' + eur(spentTotal) + '</span><span class="barcell"></span></div>');
+      h.push('</div>');
+
+      h.push('<h2>Money in</h2><div class="mny-table"><details class="mny-cat" data-cat="__in"' + (moneyOpen.__in ? ' open' : '') + '><summary class="mny-row">' +
+        '<span class="name">Service charges and other income</span><span class="num"></span><span class="num">' + eur(income) + '</span><span class="barcell"></span></summary>' +
+        '<div class="mny-lines">' + incomeLines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details></div>');
+
+      var sinkIn = sinkTx.filter(function (t) { return t.amount > 0; }).reduce(function (a, t) { return a + t.amount; }, 0);
+      var sinkOut = sinkTx.filter(function (t) { return t.amount < 0; }).reduce(function (a, t) { return a - t.amount; }, 0);
+      h.push('<h2>Sinking fund in ' + m.year + '</h2><div class="mny-table"><details class="mny-cat" data-cat="__sink"' + (moneyOpen.__sink ? ' open' : '') + '><summary class="mny-row">' +
+        '<span class="name">In ' + eur(sinkIn) + ' · out ' + eur(sinkOut) + '</span><span class="num"></span><span class="num">' + eur(sinkIn - sinkOut) + '</span><span class="barcell"></span></summary>' +
+        '<div class="mny-lines">' + sinkTx.slice().reverse().map(function (t) {
+          return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(t.category || 'to sort') + '</span></span><span class="num');
+        }).join('') + '</div></details></div>');
+
+      h.push('<div class="mny-foot"><span>Statements to ' + (asOf ? escapeHtml(fmtDay(asOf)) : '—') +
+        (m.lastImport ? ' · last checked ' + escapeHtml(m.lastImport) : '') +
+        '. To add statements, email the bank’s CSV files to <b>accounts@st-helens.ie</b>.</span>' +
+        '<button data-mact="import">Check for new statements</button></div>');
+      el.innerHTML = h.join('');
+    }
+    document.getElementById('money').addEventListener('toggle', function (ev) {
+      var d = ev.target;
+      if (d.classList && d.classList.contains('mny-cat')) {
+        var c = d.getAttribute('data-cat');
+        if (d.open) moneyOpen[c] = true; else delete moneyOpen[c];
+      }
+    }, true);
+    document.getElementById('money').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-mact]');
+      if (!b || busy) return;
+      var act = b.getAttribute('data-mact');
+      var line = b.closest('.mny-line');
+      if (act === 'change') {
+        ev.preventDefault();
+        var box = line.querySelector('.act');
+        box.hidden = !box.hidden;
+      } else if (act === 'save') {
+        var sel = line.querySelector('select[data-mact="cat"]');
+        if (!sel.value) { showStatus('Choose a category first.'); sel.focus(); return; }
+        var rem = line.querySelector('input[data-mact="remember"]');
+        call('setMoneyCategory', [b.getAttribute('data-id'), sel.value, !!(rem && rem.checked), moneyYear],
+          { button: b, label: b.textContent, working: 'Saving…', done: 'Sorted.', onSuccess: renderMoney });
+      } else if (act === 'import') {
+        call('importMoneyNow', [moneyYear], { button: b, label: b.textContent, working: 'Checking accounts@ for statements…', done: 'Checked.',
+          onSuccess: function (m) {
+            renderMoney(m);
+            var r = m.importResult || {};
+            var errs = (r.files || []).filter(function (f) { return f.error; });
+            setTimeout(function () {
+              showStatus(errs.length ? 'Problem: ' + errs.map(function (f) { return f.name + ': ' + f.error; }).join('; ') :
+                (r.added ? r.added + ' new line' + (r.added === 1 ? '' : 's') + ' added.' : 'No new statements.'));
+            }, 50);
+          } });
+      }
+    });
 
     // ---- Messages ----
 
@@ -1960,7 +2185,7 @@
       loadTasks();
       loadDigest();
       loadMessages();
-      showView(OPEN_VIEW === 'messages' ? 'messages' : 'tasks');
+      showView(OPEN_VIEW === 'messages' || OPEN_VIEW === 'money' ? OPEN_VIEW : 'tasks');
       if (OPEN_ADD) {
         OPEN_ADD = false;  // only once, not after every sign-in
         try { google.script.history.replace(null, {}, ''); } catch (e) {}
