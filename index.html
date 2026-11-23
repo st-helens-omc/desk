@@ -1484,7 +1484,7 @@
       h.push('<div class="mny-card"><div class="lbl">Current account</div><div class="big">' + (cur.balance === null ? '—' : eur(cur.balance)) +
         '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
       h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
-        '</div><div class="sub">' + (sink.asOf ? 'at ' + escapeHtml(fmtDay(sink.asOf)) : 'no statements yet') + '</div></div>');
+        '</div><div class="sub">' + (sink.asOf ? (asOf && sink.asOf < asOf ? 'statement to ' + escapeHtml(fmtDay(asOf)) + ' · no change since ' + escapeHtml(fmtDay(sink.asOf)) : 'at ' + escapeHtml(fmtDay(sink.asOf))) : 'no statements yet') + '</div></div>');
       var pctSpent = budgetTotal ? Math.round(spentTotal / budgetTotal * 100) : 0;
       h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
         '</div><div class="sub">' + pctSpent + '% of the ' + eur(budgetTotal) + ' budget' +
