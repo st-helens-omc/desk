@@ -370,6 +370,34 @@
     .mny-sort .mny-line:first-of-type { border-top: none; }
     .mny-foot { margin-top: 22px; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .mny-change { font-size: 12px; }
+    /* Sinking fund plan */
+    .plan-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 92px 92px 82px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
+    .plan-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; border-top: none; }
+    .plan-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .plan-row .guess { color: var(--muted); font-style: italic; }
+    .plan-row .none { color: var(--muted); font-size: 12px; }
+    .plan-src { font-size: 11px; padding: 1px 6px; border-radius: 100px; background: #eef0ea; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+    .plan-src.Quote { background: var(--accent-soft); color: var(--accent); }
+    .plan-src.Survey { background: #e3ecf6; color: #2a5a8a; }
+    .plan-st { font-size: 11.5px; padding: 2px 8px; border-radius: 100px; background: #eef0ea; text-align: center; }
+    .plan-st.Committed { background: var(--amber-soft); color: var(--amber); }
+    .plan-st.Done { background: var(--accent-soft); color: var(--accent); }
+    details.plan-item > summary { list-style: none; cursor: pointer; }
+    details.plan-item > summary::-webkit-details-marker { display: none; }
+    details.plan-item > summary .name::before { content: '▸ '; color: var(--muted); font-size: 11px; }
+    details.plan-item[open] > summary .name::before { content: '▾ '; }
+    details.plan-item.done > summary { color: var(--muted); }
+    .plan-body { padding: 6px 12px 12px 24px; background: #fbfbf9; border-top: 1px dashed var(--line); font-size: 13px; }
+    .plan-body p { margin: 4px 0; }
+    .plan-body .hist { color: var(--muted); font-size: 12px; margin: 2px 0; }
+    .plan-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .plan-years { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+    .neg { color: var(--red); }
+    @media (max-width: 600px) {
+      .plan-row { grid-template-columns: minmax(0, 1fr) 80px 80px; }
+      .plan-row .yr, .plan-row .stcell { display: none; }
+      .plan-body { padding-left: 12px; }
+    }
     @media (max-width: 600px) {
       #money { padding: 14px; }
       .mny-row { grid-template-columns: minmax(0, 1fr) 70px 74px; }
@@ -639,6 +667,28 @@
 
   <div id="money" hidden>
     <div id="money-body"><p class="msg-empty">Loading…</p></div>
+  </div>
+
+  <!-- Add / edit a sinking fund plan item -->
+  <div class="modal-backdrop" id="plan-modal">
+    <div class="modal">
+      <h2 id="plan-title">Plan item</h2>
+      <div class="field"><label for="pl-name">What is it?</label><input id="pl-name" maxlength="200" placeholder="e.g. Roof repairs"></div>
+      <div class="field"><label for="pl-est">Estimated cost, € (leave blank if nobody knows yet)</label><input id="pl-est" inputmode="decimal" placeholder="e.g. 12000"></div>
+      <div class="field"><label for="pl-src">Where the figure comes from</label>
+        <select id="pl-src"><option value="">—</option><option>Guess</option><option>Quote</option><option>Survey</option></select></div>
+      <div class="field"><label for="pl-srcnote">Who quoted, or what the guess is based on (optional)</label><input id="pl-srcnote" maxlength="200" placeholder="e.g. Padden, Oct 2026"></div>
+      <div class="field"><label for="pl-year">Target year (optional)</label><input id="pl-year" inputmode="numeric" maxlength="4" placeholder="e.g. 2027"></div>
+      <div class="field"><label for="pl-status">Status</label>
+        <select id="pl-status"><option>Planned</option><option>Committed</option><option>Done</option></select>
+        <div class="hint">Committed = quote accepted or deposit paid.</div></div>
+      <div class="field"><label for="pl-task">Task on the board (optional)</label><select id="pl-task"></select></div>
+      <div class="field"><label for="pl-note">Notes (optional)</label><textarea id="pl-note" maxlength="2000"></textarea></div>
+      <div class="modal-actions">
+        <button onclick="closePlanModal()">Cancel</button>
+        <button class="primary" id="pl-save" onclick="submitPlanItem()">Save</button>
+      </div>
+    </div>
   </div>
 
   <!-- Compose / edit a message -->
@@ -1429,7 +1479,11 @@
           '<label><input type="checkbox" data-mact="remember" checked> always for this payee</label>' +
           '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
       } else if (opts.change) {
-        act = '<div class="act" hidden>' + sel + '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
+        var plans = (money.plan || []);
+        var psel = plans.length && t.amount < 0 ? '<label>Plan item <select data-mact="plan"><option value="">— none —</option>' + plans.map(function (p) {
+          return '<option value="' + escapeHtml(p.id) + '"' + (p.id === t.plan ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>';
+        }).join('') + '</select></label>' : '';
+        act = '<div class="act" hidden>' + sel + psel + '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
       }
       return '<div class="mny-line" data-id="' + escapeHtml(t.id) + '">' +
         '<span>' + escapeHtml(fmtDay(t.date)) + '</span>' +
@@ -1534,12 +1588,128 @@
           return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(t.category || 'to sort') + '</span></span><span class="num');
         }).join('') + '</div></details></div>');
 
+      h.push(planHtml(m, sink));
+
       h.push('<div class="mny-foot"><span>Statements to ' + (asOf ? escapeHtml(fmtDay(asOf)) : '—') +
         (m.lastImport ? ' · last checked ' + escapeHtml(m.lastImport) : '') +
         '. To add statements, email the bank’s CSV files to <b>accounts@st-helens.ie</b>.</span>' +
         '<button data-mact="import">Check for new statements</button></div>');
       el.innerHTML = h.join('');
     }
+    // ---- Sinking fund plan ----
+    function planHtml(m, sink) {
+      var items = m.plan || [];
+      var bal = sink.balance || 0;
+      var open = items.filter(function (p) { return p.status !== 'Done'; });
+      var remaining = function (p) { return p.estimate == null ? 0 : Math.max(0, p.estimate - (p.spent || 0)); };
+      var planned = open.filter(function (p) { return p.status === 'Planned'; });
+      var committed = open.filter(function (p) { return p.status === 'Committed'; });
+      var sum = function (list) { return list.reduce(function (a, p) { return a + remaining(p); }, 0); };
+      var noEst = open.filter(function (p) { return p.estimate == null; }).length;
+      var noEstOf = function (list) { return list.filter(function (p) { return p.estimate == null; }).length; };
+      var guessed = open.filter(function (p) { return p.estimate != null && p.source !== 'Quote' && p.source !== 'Survey'; }).length;
+      var left = bal - sum(open);
+      var byYear = {};
+      open.forEach(function (p) { var y = p.year || 'No year'; byYear[y] = (byYear[y] || 0) + remaining(p); });
+      var h = [];
+      h.push('<h2>Sinking fund plan</h2>');
+      h.push('<p class="hint" style="margin:-4px 0 10px">A living list of the works the sinking fund is meant to pay for. Rough figures are fine: mark where each comes from, and replace guesses with quotes or survey figures as they arrive.</p>');
+      h.push('<div class="plan-sum">');
+      h.push('<div class="mny-card"><div class="lbl">Planned, not started</div><div class="big">' + eur(sum(planned)) + '</div><div class="sub">' +
+        planned.length + ' item' + (planned.length === 1 ? '' : 's') + (noEstOf(planned) ? ' · ' + noEstOf(planned) + ' with no estimate yet' : '') + '</div></div>');
+      h.push('<div class="mny-card"><div class="lbl">Committed, still to pay</div><div class="big">' + eur(sum(committed)) + '</div><div class="sub">' +
+        committed.length + ' item' + (committed.length === 1 ? '' : 's') + (noEstOf(committed) ? ' · ' + noEstOf(committed) + ' with no price yet' : '') + '</div></div>');
+      h.push('<div class="mny-card' + (left < 0 ? ' warn' : '') + '"><div class="lbl">Left after all of it</div><div class="big' + (left < 0 ? ' neg' : '') + '">' + eur(left) +
+        '</div><div class="sub">fund ' + eur(bal) + ' less everything not yet done' + (noEst || guessed ? '; estimates incomplete' : '') + '</div></div>');
+      h.push('</div>');
+      var yk = Object.keys(byYear).filter(function (y) { return byYear[y] > 0; }).sort();
+      if (yk.length) h.push('<p class="plan-years">Still to spend by target year: ' + yk.map(function (y) { return escapeHtml(y) + ' ' + eur(byYear[y]); }).join(' · ') + '</p>');
+      h.push('<div class="mny-table"><div class="plan-row head"><span>Item</span><span class="yr">Year</span><span class="stcell">Status</span><span class="num">Estimate</span><span class="num">Paid</span></div>');
+      var order = { Committed: 0, Planned: 1, Done: 2 };
+      items.slice().sort(function (a, b) {
+        if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+        return String(a.year || '9999').localeCompare(String(b.year || '9999')) || a.name.localeCompare(b.name);
+      }).forEach(function (p) {
+        var est = p.estimate == null ? '<span class="none">no estimate</span>' :
+          '<span class="' + (p.source === 'Quote' || p.source === 'Survey' ? '' : 'guess') + '">' + eur(p.estimate) + '</span>';
+        var src = p.source ? '<span class="plan-src ' + escapeHtml(p.source) + '">' + escapeHtml(p.source) + '</span>' : '';
+        var task = p.taskId && findTask(p.taskId);
+        var body = '<div class="plan-body">' +
+          (p.sourceNote ? '<p><b>Figure:</b> ' + escapeHtml(p.source || '') + (p.source ? ' — ' : '') + escapeHtml(p.sourceNote) + '</p>' : '') +
+          (p.note ? '<p style="white-space:pre-wrap">' + escapeHtml(p.note) + '</p>' : '') +
+          (task ? '<p><button class="link" data-pact="task" data-id="' + escapeHtml(p.taskId) + '">Task: ' + escapeHtml(task.title) + '</button></p>' : '') +
+          (p.payments && p.payments.length ? '<p><b>Payments:</b></p>' + p.payments.map(function (t) {
+            return '<p style="margin-left:10px">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
+              (t.account !== 'Sinking fund' ? ' <span class="hint">(from the ' + escapeHtml(t.account.toLowerCase()) + ')</span>' : '') + '</p>';
+          }).join('') : '<p class="hint">No payments linked yet. Link one from its “change” link in the lists above.</p>') +
+          '<div class="actions" style="margin-top:8px"><button data-pact="edit" data-id="' + escapeHtml(p.id) + '">Edit</button>' +
+          '<button class="link delete" data-pact="delete" data-id="' + escapeHtml(p.id) + '">Delete</button></div>' +
+          (p.history && p.history.length ? '<details style="margin-top:6px"><summary class="hint">History (' + p.history.length + ')</summary>' + p.history.map(function (e) {
+            return '<p class="hist">' + escapeHtml(e.when) + ' · ' + escapeHtml(e.who) + ' · ' + escapeHtml(e.text) + '</p>';
+          }).join('') + '</details>' : '') +
+          '</div>';
+        h.push('<details class="plan-item' + (p.status === 'Done' ? ' done' : '') + '" data-pid="' + escapeHtml(p.id) + '"' + (moneyOpen['plan:' + p.id] ? ' open' : '') + '>' +
+          '<summary class="plan-row"><span class="name">' + escapeHtml(p.name) + src + '</span><span class="yr">' + escapeHtml(p.year || '—') + '</span>' +
+          '<span class="stcell"><span class="plan-st ' + escapeHtml(p.status) + '">' + escapeHtml(p.status) + '</span></span>' +
+          '<span class="num">' + est + '</span><span class="num">' + (p.spent ? eur(p.spent) : '—') + '</span></summary>' + body + '</details>');
+      });
+      if (!items.length) h.push('<div class="plan-row"><span class="hint">Nothing in the plan yet.</span></div>');
+      h.push('</div><p style="margin-top:8px"><button data-pact="add">+ Add an item</button></p>');
+      return h.join('');
+    }
+    var planEditId = null;
+    function openPlanModal(id) {
+      var p = id ? (money.plan || []).filter(function (x) { return x.id === id; })[0] : null;
+      planEditId = p ? p.id : null;
+      document.getElementById('plan-title').textContent = p ? 'Edit plan item' : 'Add to the sinking fund plan';
+      document.getElementById('pl-name').value = p ? p.name : '';
+      document.getElementById('pl-est').value = p && p.estimate != null ? p.estimate : '';
+      document.getElementById('pl-src').value = p ? p.source : '';
+      document.getElementById('pl-srcnote').value = p ? p.sourceNote : '';
+      document.getElementById('pl-year').value = p ? p.year : '';
+      document.getElementById('pl-status').value = p ? p.status : 'Planned';
+      document.getElementById('pl-note').value = p ? p.note : '';
+      var tsel = document.getElementById('pl-task');
+      tsel.innerHTML = '<option value="">— none —</option>' + lastTasks.filter(function (t) { return t.status !== 'Done' || (p && t.id === p.taskId); })
+        .map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.title) + '</option>'; }).join('');
+      tsel.value = p ? p.taskId : '';
+      document.getElementById('plan-modal').classList.add('open');
+      setTimeout(function () { document.getElementById('pl-name').focus(); }, 50);
+    }
+    function closePlanModal() { document.getElementById('plan-modal').classList.remove('open'); planEditId = null; }
+    function submitPlanItem() {
+      var item = {
+        id: planEditId || '', name: document.getElementById('pl-name').value.trim(),
+        estimate: document.getElementById('pl-est').value.trim(), source: document.getElementById('pl-src').value,
+        sourceNote: document.getElementById('pl-srcnote').value.trim(), year: document.getElementById('pl-year').value.trim(),
+        status: document.getElementById('pl-status').value, taskId: document.getElementById('pl-task').value,
+        note: document.getElementById('pl-note').value.trim()
+      };
+      if (!item.name) { showStatus('Give the item a name.'); return; }
+      var b = document.getElementById('pl-save');
+      call('saveFundPlanItem', [item, moneyYear], { button: b, label: 'Save', working: 'Saving…', done: 'Plan updated.',
+        onSuccess: function (m) { closePlanModal(); renderMoney(m); } });
+    }
+    document.getElementById('money').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-pact]');
+      if (!b || busy) return;
+      var act = b.getAttribute('data-pact'), id = b.getAttribute('data-id');
+      if (act === 'add') openPlanModal(null);
+      else if (act === 'edit') openPlanModal(id);
+      else if (act === 'task') openTaskView(id);
+      else if (act === 'delete') {
+        var p = (money.plan || []).filter(function (x) { return x.id === id; })[0];
+        if (!p || !window.confirm('Delete “' + p.name + '” from the plan? Any linked payments are unlinked; nothing else changes.')) return;
+        call('deleteFundPlanItem', [id, moneyYear], { button: b, label: b.textContent, working: 'Deleting…', done: 'Deleted.', onSuccess: renderMoney });
+      }
+    });
+    document.getElementById('money').addEventListener('toggle', function (ev) {
+      var d = ev.target;
+      if (d.classList && d.classList.contains('plan-item')) {
+        var k = 'plan:' + d.getAttribute('data-pid');
+        if (d.open) moneyOpen[k] = true; else delete moneyOpen[k];
+      }
+    }, true);
     document.getElementById('money').addEventListener('toggle', function (ev) {
       var d = ev.target;
       if (d.classList && d.classList.contains('mny-cat')) {
@@ -1560,7 +1730,8 @@
         var sel = line.querySelector('select[data-mact="cat"]');
         if (!sel.value) { showStatus('Choose a category first.'); sel.focus(); return; }
         var rem = line.querySelector('input[data-mact="remember"]');
-        call('setMoneyCategory', [b.getAttribute('data-id'), sel.value, !!(rem && rem.checked), moneyYear],
+        var psel = line.querySelector('select[data-mact="plan"]');
+        call('setMoneyCategory', [b.getAttribute('data-id'), sel.value, !!(rem && rem.checked), moneyYear, psel ? psel.value : null],
           { button: b, label: b.textContent, working: 'Saving…', done: 'Sorted.', onSuccess: renderMoney });
       } else if (act === 'import') {
         call('importMoneyNow', [moneyYear], { button: b, label: b.textContent, working: 'Checking accounts@ for statements…', done: 'Checked.',
