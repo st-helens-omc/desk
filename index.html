@@ -885,7 +885,10 @@
       busy = on;
       document.body.classList.toggle('busy', on);
       var buttons = document.querySelectorAll('.actions button, .minor-actions button, .modal-actions button.primary, header button');
-      for (var i = 0; i < buttons.length; i++) buttons[i].disabled = on;
+      for (var i = 0; i < buttons.length; i++) {
+        if (!on && buttons[i].hasAttribute('data-needs-change')) continue;  // stays off until its form changes
+        buttons[i].disabled = on;
+      }
     }
 
     // Runs one server call with immediate feedback: the clicked button changes to
@@ -1566,7 +1569,7 @@
       var invoices = m.invoices || [];
       var invState = function (inv) {
         if (inv.status === 'Not an invoice') return 'ignored';
-        if (inv.status !== 'Entered' || inv.total == null) return 'enter';
+        if (inv.status !== 'Entered' || inv.total == null) return 'enter';   // 'To enter' or 'To check'
         var due = Math.round((inv.total - (inv.paid || 0)) * 100) / 100;
         if (due <= 0.009) return 'paid';
         return inv.paid > 0 ? 'part' : 'unpaid';
@@ -1609,7 +1612,9 @@
         if (toSort.length) att.push(['running', toSort.length + ' payment' + (toSort.length === 1 ? '' : 's') + ' to sort into a category (' + eur(unsortedOut) + ')']);
         var over = rows.filter(function (r) { return r.spent > r.budget + 0.5; });
         if (over.length) att.push(['running', 'Over budget: ' + over.map(function (r) { return escapeHtml(r.name) + ' (' + eur(r.spent) + ' of ' + eur(r.budget) + ')'; }).join(', ')]);
-        if (toEnter.length) att.push(['invoices', toEnter.length + ' invoice' + (toEnter.length === 1 ? '' : 's') + ' to enter']);
+        var toCheck = toEnter.filter(function (i) { return i.status === 'To check'; }).length, toType = toEnter.length - toCheck;
+        if (toCheck) att.push(['invoices', toCheck + ' invoice' + (toCheck === 1 ? '' : 's') + ' read automatically, to check']);
+        if (toType) att.push(['invoices', toType + ' invoice' + (toType === 1 ? '' : 's') + ' to enter by hand']);
         if (owing.length) att.push(['invoices', owing.length + ' invoice' + (owing.length === 1 ? '' : 's') + ' not fully paid (' + eur(owingTotal, true) + ' outstanding)']);
         if (pt.noEst) att.push(['fund', pt.noEst + ' sinking fund item' + (pt.noEst === 1 ? '' : 's') + ' with no estimate yet']);
         h.push('<h2>Needs attention</h2>');
@@ -1718,7 +1723,7 @@
         list.forEach(function (i) { h.push(invoiceItemHtml(m, i, invState(i), label, openByDefault)); });
         h.push('</div>');
       };
-      section('To enter', groups.enter, true);
+      section('To check or enter', groups.enter, true);
       section('Not fully paid', groups.unpaid.concat(groups.part), false);
       section('Paid', groups.paid, false);
       section('Set aside (not invoices)', groups.ignored, false);
@@ -1739,23 +1744,33 @@
     }
     function invoiceItemHtml(m, i, st, label, openByDefault) {
       var due = i.total != null ? Math.round((i.total - (i.paid || 0)) * 100) / 100 : null;
-      var stText = st === 'part' ? 'Part paid · ' + eur(due, true) + ' due' : label[st];
+      var stText = st === 'part' ? 'Part paid · ' + eur(due, true) + ' due' : (st === 'enter' && i.status === 'To check' ? 'To check' : label[st]);
+      var checking = st === 'enter' && i.status === 'To check';
       var name = i.supplier || i.fileName || 'Invoice';
       var isOpen = invOpen[i.id] != null ? invOpen[i.id] : !!openByDefault;
       var v = function (x) { return x == null ? '' : x; };
+      var inp = function (f, attrs, val) {
+        return '<input data-f="' + f + '" ' + attrs + ' value="' + escapeHtml(v(val)) + '" data-orig="' + escapeHtml(v(val)) + '">';
+      };
       var body = '<div class="inv-body">' +
         '<p><button data-iact="open" data-id="' + escapeHtml(i.id) + '">Open the invoice</button> <span class="hint">' + escapeHtml(i.fileName) +
           ' · from ' + escapeHtml(i.from) + (i.received ? ', ' + escapeHtml(fmtDay(i.received)) : '') + '</span></p>' +
+        (checking ? '<p class="inv-sugg" style="margin:6px 0">Read automatically from the invoice' + (i.read && i.read.known ? ' (a supplier the Desk knows)' : '') +
+          '. Check the figures against the invoice, fix anything that’s wrong, then click <b>Looks right</b>.</p>' : '') +
+        (st === 'enter' && !checking && i.read ? '<p class="hint">The Desk couldn’t read the figures from this one, so please type them in.</p>' : '') +
         '<div class="inv-form" data-id="' + escapeHtml(i.id) + '">' +
-          '<div><label>Supplier</label><input data-f="supplier" maxlength="120" value="' + escapeHtml(v(i.supplier)) + '"></div>' +
-          '<div><label>Invoice number</label><input data-f="number" maxlength="60" value="' + escapeHtml(v(i.number)) + '"></div>' +
-          '<div><label>Invoice date</label><input data-f="date" type="date" value="' + escapeHtml(v(i.date)) + '"></div>' +
-          '<div><label>Net €</label><input data-f="net" inputmode="decimal" value="' + escapeHtml(v(i.net)) + '"></div>' +
-          '<div><label>VAT €</label><input data-f="vat" inputmode="decimal" value="' + escapeHtml(v(i.vat)) + '"></div>' +
-          '<div><label>Total € (to pay)</label><input data-f="total" inputmode="decimal" value="' + escapeHtml(v(i.total)) + '" placeholder="net + VAT"></div>' +
-          '<div class="wide"><label>Note</label><textarea data-f="note" maxlength="2000" rows="2">' + escapeHtml(v(i.note)) + '</textarea></div>' +
+          '<div><label>Supplier</label>' + inp('supplier', 'maxlength="120"', i.supplier) + '</div>' +
+          '<div><label>Invoice number</label>' + inp('number', 'maxlength="60"', i.number) + '</div>' +
+          '<div><label>Invoice date</label>' + inp('date', 'type="date"', i.date) + '</div>' +
+          '<div><label>Net €</label>' + inp('net', 'inputmode="decimal"', i.net) + '</div>' +
+          '<div><label>VAT €</label>' + inp('vat', 'inputmode="decimal"', i.vat) + '</div>' +
+          '<div><label>Total € (to pay)</label>' + inp('total', 'inputmode="decimal" placeholder="net + VAT"', i.total) + '</div>' +
+          '<div class="wide"><label>Note</label><textarea data-f="note" maxlength="2000" rows="2" data-orig="' + escapeHtml(v(i.note)) + '">' + escapeHtml(v(i.note)) + '</textarea></div>' +
         '</div>' +
-        '<div class="actions"><button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '">' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>' +
+        '<div class="actions">' +
+          (checking ? '<button class="primary" data-iact="save" data-confirm="1" data-id="' + escapeHtml(i.id) + '">Looks right</button>'
+            : '<button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '" data-needs-change="1" disabled>' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>') +
+          (st === 'enter' && !checking ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">Try reading it again</button>' : '') +
           (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') + '</div>';
       if (st !== 'enter' && st !== 'ignored') {
         body += '<p style="margin-top:10px"><b>Paid:</b> ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) +
@@ -1773,10 +1788,15 @@
             body += '<div class="inv-pay inv-sugg">Looks like a match: ' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) +
               ' <button data-iact="match" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">Match</button></div>';
           });
-          body += '<div class="inv-pay"><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Match another payment…</option>' +
-            after.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
-              return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) + '</option>';
-            }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
+          // Other payments that could plausibly cover what's still owed: no bigger than it, around or after the invoice date.
+          var fits = after.filter(function (t) { return -t.amount <= due + 0.01 && sugg.indexOf(t) === -1; });
+          if (fits.length) {
+            body += '<p><button class="link" data-iact="more" data-id="' + escapeHtml(i.id) + '">Match another payment…</button></p>' +
+              '<div class="inv-pay" data-more="' + escapeHtml(i.id) + '" hidden><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Choose a payment (up to ' + eur(due, true) + ')</option>' +
+              fits.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
+                return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true) + '</option>';
+              }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
+          }
         }
       }
       if (i.history && i.history.length) {
@@ -1799,6 +1819,14 @@
       var d = ev.target;
       if (d.classList && d.classList.contains('inv-item')) invOpen[d.getAttribute('data-iid')] = d.open;
     }, true);
+    // Invoice forms: "Save changes" only lights up once something has actually changed.
+    document.getElementById('money').addEventListener('input', function (ev) {
+      var form = ev.target.closest && ev.target.closest('.inv-form');
+      if (!form) return;
+      var changed = Array.prototype.some.call(form.querySelectorAll('[data-f]'), function (f) { return f.value.trim() !== (f.getAttribute('data-orig') || ''); });
+      var btn = document.querySelector('button[data-iact="save"][data-needs-change][data-id="' + form.getAttribute('data-id') + '"]');
+      if (btn) btn.disabled = !changed;
+    });
     document.getElementById('money').addEventListener('change', function (ev) {
       if (ev.target.id !== 'inv-file') return;
       var file = ev.target.files && ev.target.files[0];
@@ -1822,14 +1850,21 @@
       var act = b.getAttribute('data-iact'), id = b.getAttribute('data-id');
       var opts = function (working, done) { return { button: b, label: b.textContent, working: working, done: done, onSuccess: renderMoney }; };
       if (act === 'upload') { document.getElementById('inv-file').click(); }
+      else if (act === 'more') { var box = document.querySelector('[data-more="' + id + '"]'); if (box) box.hidden = !box.hidden; }
+      else if (act === 'reread') { invOpen[id] = true; call('rereadInvoice', [id, moneyYear], opts('Reading…', 'Done.')); }
       else if (act === 'open') { openAttachment(id, 'Invoice', b, 'getInvoiceFile'); }
       else if (act === 'save' || act === 'ignore') {
         var form = document.querySelector('.inv-form[data-id="' + id + '"]');
-        var inv = { id: id, status: act === 'ignore' ? 'Not an invoice' : 'Entered' };
+        var inv = { id: id, status: act === 'ignore' ? 'Not an invoice' : 'Entered', confirm: !!b.getAttribute('data-confirm') };
         form.querySelectorAll('[data-f]').forEach(function (f) { inv[f.getAttribute('data-f')] = f.value.trim(); });
         if (act === 'save' && (!inv.supplier || (!inv.total && !inv.net))) { showStatus('Fill in at least the supplier and the total.'); return; }
         invOpen[id] = true;
-        call('saveInvoice', [inv, moneyYear], opts('Saving…', act === 'ignore' ? 'Set aside.' : 'Saved.'));
+        call('saveInvoice', [inv, moneyYear], { button: b, label: b.textContent, working: 'Saving…', done: act === 'ignore' ? 'Set aside.' : 'Saved.',
+          onSuccess: function (m) {
+            renderMoney(m);
+            var a = m.autoMatched || [];
+            if (a.length) setTimeout(function () { showStatus('Saved, and matched to the payment ' + a.map(function (x) { return x.payment; }).join('; ') + '.'); }, 50);
+          } });
       } else if (act === 'match') {
         call('linkInvoicePayment', [id, b.getAttribute('data-t'), true, moneyYear], opts('Matching…', 'Matched.'));
       } else if (act === 'matchpick') {
@@ -1993,7 +2028,8 @@
             setTimeout(function () {
               showStatus(errs.length ? 'Problem: ' + errs.map(function (f) { return f.name + ': ' + f.error; }).join('; ') :
                 (r.added || r.invoicesAdded ? [r.added ? r.added + ' new bank line' + (r.added === 1 ? '' : 's') : '',
-                  r.invoicesAdded ? r.invoicesAdded + ' new invoice' + (r.invoicesAdded === 1 ? '' : 's') : ''].filter(Boolean).join(' and ') + ' added.' : 'Nothing new.'));
+                  r.invoicesAdded ? r.invoicesAdded + ' new invoice' + (r.invoicesAdded === 1 ? '' : 's') : ''].filter(Boolean).join(' and ') + ' added' +
+                  ((r.autoMatched || []).length ? '; ' + r.autoMatched.length + ' invoice' + (r.autoMatched.length === 1 ? '' : 's') + ' matched to payments automatically' : '') + '.' : 'Nothing new.'));
             }, 50);
           } });
       }
