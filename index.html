@@ -1485,10 +1485,14 @@
         '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
       h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
         '</div><div class="sub">' + (sink.asOf ? 'at ' + escapeHtml(fmtDay(sink.asOf)) : 'no statements yet') + '</div></div>');
+      var pctSpent = budgetTotal ? Math.round(spentTotal / budgetTotal * 100) : 0;
       h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
-        '</div><div class="sub">of ' + eur(budgetTotal) + ' budget' + (thisYear ? ' · ' + Math.round(progress * 100) + '% of the year gone' : '') + '</div></div>');
+        '</div><div class="sub">' + pctSpent + '% of the ' + eur(budgetTotal) + ' budget' +
+        (thisYear ? ' · ' + Math.round(progress * 100) + '% of the year gone' : '') + '</div></div>');
+      var expected = m.expectedIncome != null ? m.expectedIncome : budgetTotal;
       h.push('<div class="mny-card"><div class="lbl">Service charges in</div><div class="big">' + eur(income) +
-        '</div><div class="sub">expected ' + eur(budgetTotal) + ' for the year</div></div>');
+        '</div><div class="sub">' + (expected ? Math.round(income / expected * 100) + '% of ' + eur(expected) + ' expected this year' : '') +
+        (m.expectedIncome != null && m.expectedIncome !== budgetTotal ? ' (' + eur(budgetTotal - m.expectedIncome) + ' was paid in advance)' : '') + '</div></div>');
       if (toSort.length) {
         h.push('<div class="mny-card warn"><div class="lbl">To sort</div><div class="big">' + toSort.length +
           '</div><div class="sub">' + eur(unsortedOut) + ' not yet in a category</div></div>');
