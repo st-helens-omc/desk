@@ -380,14 +380,14 @@
     .mny-att li { margin: 4px 0; }
     .mny-search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
     /* Invoices */
-    .inv-row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 92px 110px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
+    .inv-row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 92px 180px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
     .inv-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; border-top: none; }
     .inv-row .num { text-align: right; font-variant-numeric: tabular-nums; }
     details.inv-item > summary { list-style: none; cursor: pointer; }
     details.inv-item > summary::-webkit-details-marker { display: none; }
     details.inv-item > summary .name::before { content: '▸ '; color: var(--muted); font-size: 11px; }
     details.inv-item[open] > summary .name::before { content: '▾ '; }
-    .inv-st { font-size: 11.5px; padding: 2px 8px; border-radius: 100px; background: #eef0ea; text-align: center; white-space: nowrap; }
+    .inv-st { font-size: 11.5px; padding: 2px 8px; border-radius: 100px; background: #eef0ea; text-align: center; display: inline-block; line-height: 1.35; }
     .inv-st.enter { background: var(--amber-soft); color: var(--amber); }
     .inv-st.unpaid, .inv-st.part { background: var(--red-soft); color: var(--red); }
     .inv-st.paid { background: var(--accent-soft); color: var(--accent); }
@@ -401,7 +401,6 @@
     .inv-sugg { background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
     @media (max-width: 600px) {
       .inv-row { grid-template-columns: minmax(0, 1fr) 84px 104px; }
-      .inv-st { white-space: normal; display: inline-block; line-height: 1.3; }
       .inv-row .dt { display: none; }
       .inv-body { padding-left: 12px; }
     }
@@ -1787,7 +1786,7 @@
       }
       body += '</div>';
       return '<details class="inv-item" data-iid="' + escapeHtml(i.id) + '"' + (isOpen ? ' open' : '') + '><summary class="inv-row">' +
-        '<span class="name">' + escapeHtml(name) + (i.number ? ' <span class="hint">#' + escapeHtml(i.number) + '</span>' : '') + '</span>' +
+        '<span class="name">' + escapeHtml(name) + (i.number ? ' <span class="hint">#' + escapeHtml(String(i.number).replace(/^#+\s*/, '')) + '</span>' : '') + '</span>' +
         '<span class="dt">' + (i.date ? escapeHtml(fmtDay(i.date)) : '—') + '</span>' +
         '<span class="num">' + (i.total != null ? eur(i.total, true) : '—') + '</span>' +
         '<span class="num"><span class="inv-st ' + st + '">' + escapeHtml(stText) + '</span></span></summary>' + body + '</details>';
