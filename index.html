@@ -409,7 +409,7 @@
       .inv-body { padding-left: 12px; }
     }
     /* Sinking fund plan */
-    .plan-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 92px 92px 82px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
+    .plan-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 140px 92px 82px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; }
     .plan-row.head { font-size: 12px; color: var(--muted); background: #f7f8f5; border-top: none; }
     .plan-row .num { text-align: right; font-variant-numeric: tabular-nums; }
     .plan-row .guess { color: var(--muted); font-style: italic; }
@@ -718,7 +718,7 @@
       <div class="field"><label for="pl-srcnote">Who quoted, or what the guess is based on (optional)</label><input id="pl-srcnote" maxlength="200" placeholder="e.g. Padden, Oct 2026"></div>
       <div class="field"><label for="pl-year">Target year (optional)</label><input id="pl-year" inputmode="numeric" maxlength="4" placeholder="e.g. 2027"></div>
       <div class="field"><label for="pl-status">Status</label>
-        <select id="pl-status"><option>Planned</option><option>Committed</option><option>Done</option></select>
+        <select id="pl-status"><option value="Planned">Under consideration</option><option value="Committed">Committed</option><option value="Done">Done</option></select>
         <div class="hint">Committed = quote accepted or deposit paid.</div></div>
       <div class="field"><label for="pl-task">Task on the board (optional)</label><select id="pl-task"></select></div>
       <div class="field"><label for="pl-note">Notes (optional)</label><textarea id="pl-note" maxlength="2000"></textarea></div>
@@ -1608,8 +1608,12 @@
         h.push('<div class="mny-card"><div class="lbl">Service charges in</div><div class="big">' + eur(income) +
           '</div><div class="sub">' + (expected ? Math.round(income / expected * 100) + '% of ' + eur(expected) + ' expected this year' : '') +
           (m.expectedIncome != null && m.expectedIncome !== budgetTotal ? ' (' + eur(budgetTotal - m.expectedIncome) + ' was paid in advance)' : '') + '</div></div>');
-        h.push('<div class="mny-card' + (pt.left < 0 ? ' warn' : '') + '"><div class="lbl">Sinking fund after planned work</div><div class="big' + (pt.left < 0 ? ' neg' : '') + '">' + eur(pt.left) +
-          '</div><div class="sub">' + (pt.noEst ? pt.noEst + ' planned item' + (pt.noEst === 1 ? '' : 's') + ' not yet costed' : 'all planned items costed') + '</div></div>');
+        h.push('<div class="mny-card' + (pt.afterCommitted < 0 ? ' warn' : '') + '"><div class="lbl">Sinking fund after committed work</div><div class="big' + (pt.afterCommitted < 0 ? ' neg' : '') + '">' + eur(pt.afterCommitted) +
+          '</div><div class="sub">' + (!pt.committedCount ? 'Nothing committed yet'
+            : pt.committedNoPrice === pt.committedCount ? 'Committed: ' + plural(pt.committedCount, 'item') + ', no price yet'
+            : 'Committed: ' + eur(pt.committedSum) + ' (' + plural(pt.committedCount, 'item') + (pt.committedNoPrice ? ', ' + pt.committedNoPrice + ' with no price yet' : '') + ')') +
+          '<br>If everything under consideration went ahead: <span style="white-space:nowrap" class="' + (pt.left < 0 ? 'neg' : '') + '">' + eur(pt.left) + '</span>' +
+          (pt.noEst ? ' (' + plural(pt.noEst, 'item') + ' not yet costed)' : '') + '</div></div>');
         h.push('</div>');
         // Needs attention
         var att = [];
@@ -1901,12 +1905,20 @@
     });
 
     // ---- Sinking fund plan ----
+    // Plan status as shown to directors. The Sheet keeps the original value "Planned" for items
+    // that are only being considered; nothing is decided until an item is marked Committed.
+    var PLAN_LABEL = { Planned: 'Under consideration', Committed: 'Committed', Done: 'Done' };
     function planTotals(m, bal) {
       var open = (m.plan || []).filter(function (p) { return p.status !== 'Done'; });
+      var committed = open.filter(function (p) { return p.status === 'Committed'; });
       var remaining = function (p) { return p.estimate == null ? 0 : Math.max(0, p.estimate - (p.spent || 0)); };
-      var sum = open.reduce(function (a, p) { return a + remaining(p); }, 0);
-      return { left: bal - sum, noEst: open.filter(function (p) { return p.estimate == null; }).length };
+      var sum = function (list) { return list.reduce(function (a, p) { return a + remaining(p); }, 0); };
+      var noEst = function (list) { return list.filter(function (p) { return p.estimate == null; }).length; };
+      return { left: bal - sum(open), noEst: noEst(open),
+               afterCommitted: bal - sum(committed), committedSum: sum(committed),
+               committedCount: committed.length, committedNoPrice: noEst(committed) };
     }
+    function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
     function planHtml(m, sink) {
       var items = m.plan || [];
       var bal = sink.balance || 0;
@@ -1925,12 +1937,13 @@
       h.push('<h2>Sinking fund plan</h2>');
       h.push('<p class="hint" style="margin:-4px 0 10px">A living list of the works the sinking fund is meant to pay for. Rough figures are fine: mark where each comes from, and replace guesses with quotes or survey figures as they arrive.</p>');
       h.push('<div class="plan-sum">');
-      h.push('<div class="mny-card"><div class="lbl">Planned, not started</div><div class="big">' + eur(sum(planned)) + '</div><div class="sub">' +
+      h.push('<div class="mny-card"><div class="lbl">Under consideration</div><div class="big">' + eur(sum(planned)) + '</div><div class="sub">' +
         planned.length + ' item' + (planned.length === 1 ? '' : 's') + (noEstOf(planned) ? ' · ' + noEstOf(planned) + ' with no estimate yet' : '') + '</div></div>');
       h.push('<div class="mny-card"><div class="lbl">Committed, still to pay</div><div class="big">' + eur(sum(committed)) + '</div><div class="sub">' +
-        committed.length + ' item' + (committed.length === 1 ? '' : 's') + (noEstOf(committed) ? ' · ' + noEstOf(committed) + ' with no price yet' : '') + '</div></div>');
-      h.push('<div class="mny-card' + (left < 0 ? ' warn' : '') + '"><div class="lbl">Left after all of it</div><div class="big' + (left < 0 ? ' neg' : '') + '">' + eur(left) +
-        '</div><div class="sub">fund ' + eur(bal) + ' less everything not yet done' + (noEst || guessed ? '; estimates incomplete' : '') + '</div></div>');
+        committed.length + ' item' + (committed.length === 1 ? '' : 's') + (noEstOf(committed) ? ' · ' + noEstOf(committed) + ' with no price yet' : '') +
+        ' · fund after this: ' + eur(bal - sum(committed)) + '</div></div>');
+      h.push('<div class="mny-card' + (left < 0 ? ' warn' : '') + '"><div class="lbl">If everything went ahead</div><div class="big' + (left < 0 ? ' neg' : '') + '">' + eur(left) +
+        '</div><div class="sub">fund ' + eur(bal) + ' less everything committed or under consideration' + (noEst || guessed ? '; estimates incomplete' : '') + '</div></div>');
       h.push('</div>');
       var yk = Object.keys(byYear).filter(function (y) { return byYear[y] > 0; }).sort();
       if (yk.length) h.push('<p class="plan-years">Still to spend by target year: ' + yk.map(function (y) { return escapeHtml(y) + ' ' + eur(byYear[y]); }).join(' · ') + '</p>');
@@ -1960,7 +1973,7 @@
           '</div>';
         h.push('<details class="plan-item' + (p.status === 'Done' ? ' done' : '') + '" data-pid="' + escapeHtml(p.id) + '"' + (moneyOpen['plan:' + p.id] ? ' open' : '') + '>' +
           '<summary class="plan-row"><span class="name">' + escapeHtml(p.name) + src + '</span><span class="yr">' + escapeHtml(p.year || '—') + '</span>' +
-          '<span class="stcell"><span class="plan-st ' + escapeHtml(p.status) + '">' + escapeHtml(p.status) + '</span></span>' +
+          '<span class="stcell"><span class="plan-st ' + escapeHtml(p.status) + '">' + escapeHtml(PLAN_LABEL[p.status] || p.status) + '</span></span>' +
           '<span class="num">' + est + '</span><span class="num">' + (p.spent ? eur(p.spent) : '—') + '</span></summary>' + body + '</details>');
       });
       if (!items.length) h.push('<div class="plan-row"><span class="hint">Nothing in the plan yet.</span></div>');
