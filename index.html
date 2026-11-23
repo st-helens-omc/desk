@@ -721,6 +721,9 @@
     function writeStore(name, value) {
       try { localStorage.setItem(name, JSON.stringify(value)); } catch (e) {}
     }
+    // A copy of the board kept on this device so it opens instantly (see start()).
+    var CACHE_STORE = 'stHelensTasksCache', CACHE_MAX_AGE = 14 * 864e5;
+    function clearCache() { try { localStorage.removeItem(CACHE_STORE); } catch (e) {} lastTasks = []; }
     var openCards = readStore('stHelensOpenCards', {});
     var filters = readStore('stHelensFilters', { who: 'all', cat: '' });
 
@@ -816,11 +819,17 @@
     }
 
     function loadTasks() {
-      ['list-open', 'list-progress', 'list-done', 'list-later'].forEach(function (id) {
-        document.getElementById(id).innerHTML = '<div class="empty-hint">Loading…</div>';
-      });
+      if (!lastTasks.length) {  // keep showing the board while it refreshes
+        ['list-open', 'list-progress', 'list-done', 'list-later'].forEach(function (id) {
+          document.getElementById(id).innerHTML = '<div class="empty-hint">Loading…</div>';
+        });
+      }
       google.script.run
-        .withSuccessHandler(renderBoard)
+        .withSuccessHandler(function (tasks) {
+          var el = document.getElementById('status-msg');
+          if (el.textContent === 'Updating…') el.style.display = 'none';
+          renderBoard(tasks);
+        })
         .withFailureHandler(function (err) { showStatus('Couldn\'t load the tasks: ' + err.message); })
         .getTasks(KEY);
     }
@@ -858,8 +867,9 @@
       renderBoard(lastTasks);
     }
 
-    function renderBoard(tasks) {
+    function renderBoard(tasks, fromCache) {
       lastTasks = tasks || [];
+      if (!fromCache && MY_NAME) writeStore(CACHE_STORE, { at: Date.now(), name: MY_NAME, tasks: lastTasks });
       refreshCategoryFilter();
       var shown = lastTasks.filter(passesFilter);
       var later = shown.filter(isDeferred);
@@ -895,7 +905,8 @@
       }
       renderColumn('list-later', later, 'later');
       refreshTaskView();
-      if (OPEN_TASK && tasks) {  // arrived by a link to one task: open it once the tasks are in
+      if (OPEN_TASK && tasks && !(fromCache && !findTask(OPEN_TASK))) {  // arrived by a link to one task
+        // (a task newer than the device's copy waits for the fresh list)
         var want = OPEN_TASK;
         OPEN_TASK = '';
         openTaskView(want);
@@ -1925,7 +1936,7 @@
         })
         .completeCodeSignIn(PENDING_NAME, code);
     }
-    function enterBoard(name) {
+    function enterBoard(name, cachedTasks) {
       document.getElementById('signin').hidden = true;
       document.getElementById('board').hidden = false;
       document.getElementById('who-name').textContent = name;
@@ -1933,6 +1944,7 @@
       document.getElementById('who').hidden = false;
       document.getElementById('views').hidden = false;
       loadDirectors();
+      if (cachedTasks) { renderBoard(cachedTasks, true); showStatus('Updating…', true); }
       loadTasks();
       loadDigest();
       loadMessages();
@@ -1961,6 +1973,7 @@
     function doSignOut() {
       var k = KEY;
       KEY = '';
+      clearCache();
       setStoredKey('');
       if (k) google.script.run.signOut(k);
       showPick();
@@ -1976,6 +1989,20 @@
       }
       var stored = getStoredKey();
       if (!stored) { showPick(); return; }
+      // Fast start: if this device has used the Desk recently, show the board (and any linked
+      // task) straight away from the copy kept on the device, while the sign-in is checked and
+      // the latest tasks load in the background. Actions always go to the server.
+      var cache = readStore(CACHE_STORE, null);
+      if (cache && cache.name && cache.tasks && Date.now() - (cache.at || 0) < CACHE_MAX_AGE) {
+        KEY = stored;
+        enterBoard(cache.name, cache.tasks);
+        google.script.run
+          .withSuccessHandler(function (me) {
+            if (!me) { clearCache(); setStoredKey(''); KEY = ''; showPick(); showStatus('Please sign in again.'); }
+          })
+          .whoAmI(stored);
+        return;
+      }
       showOnly('signin-wait');
       google.script.run
         .withSuccessHandler(function (me) {
