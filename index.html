@@ -1716,6 +1716,10 @@
       var h = [];
       h.push('<p class="hint" style="margin:0 0 10px">Email invoices (PDF or photo) to <b>accounts@st-helens.ie</b>, or upload one here. Enter the details once, then match the payment that paid it.</p>');
       h.push('<p><button data-iact="upload">+ Upload an invoice</button><input type="file" id="inv-file" accept="application/pdf,image/*" hidden></p>');
+      // Known suppliers for the Supplier box (type a new one, or pick one the Desk already knows).
+      var names = {};
+      (m.suppliers || []).concat((m.invoices || []).map(function (x) { return x.supplier; })).forEach(function (n) { if (n) names[n] = true; });
+      h.push('<datalist id="supplier-list">' + Object.keys(names).sort().map(function (n) { return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>');
       var section = function (title, list, openByDefault) {
         if (!list.length) return;
         h.push('<h2>' + title + ' (' + list.length + ')</h2><div class="mny-table">');
@@ -1759,7 +1763,7 @@
           '. Check the figures against the invoice, fix anything that’s wrong, then click <b>Looks right</b>.</p>' : '') +
         (st === 'enter' && !checking && i.read ? '<p class="hint">The Desk couldn’t read the figures from this one, so please type them in.</p>' : '') +
         '<div class="inv-form" data-id="' + escapeHtml(i.id) + '">' +
-          '<div><label>Supplier</label>' + inp('supplier', 'maxlength="120"', i.supplier) + '</div>' +
+          '<div><label>Supplier</label>' + inp('supplier', 'maxlength="120" list="supplier-list" autocomplete="off"', i.supplier) + '</div>' +
           '<div><label>Invoice number</label>' + inp('number', 'maxlength="60"', i.number) + '</div>' +
           '<div><label>Invoice date</label>' + inp('date', 'type="date"', i.date) + '</div>' +
           '<div><label>Net €</label>' + inp('net', 'inputmode="decimal"', i.net) + '</div>' +
@@ -1770,7 +1774,7 @@
         '<div class="actions">' +
           (checking ? '<button class="primary" data-iact="save" data-confirm="1" data-id="' + escapeHtml(i.id) + '">Looks right</button>'
             : '<button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '" data-needs-change="1" disabled>' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>') +
-          (st === 'enter' && !checking ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">Try reading it again</button>' : '') +
+          (st === 'enter' ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">Try reading it again</button>' : '') +
           (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') + '</div>';
       if (st !== 'enter' && st !== 'ignored') {
         body += '<p style="margin-top:10px"><b>Paid:</b> ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) +
