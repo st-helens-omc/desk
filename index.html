@@ -1588,7 +1588,7 @@
         if (inv.status !== 'Entered' || inv.total == null) return 'enter';   // 'To enter' or 'To check'
         if (inv.paidBy) return inv.reimbursement ? 'paid' : 'reimb';          // paid by a director personally
         var due = Math.round((inv.total - (inv.paid || 0)) * 100) / 100;
-        if (due <= 0.009) return 'paid';
+        if (due <= 0.009 || inv.closed) return 'paid';
         return inv.paid > 0 ? 'part' : 'unpaid';
       };
       var toEnter = invoices.filter(function (i) { return invState(i) === 'enter'; });
@@ -1739,7 +1739,8 @@
       var label = { enter: 'To enter', unpaid: 'Unpaid', part: 'Part paid', reimb: 'To reimburse', paid: 'Paid', ignored: 'Not an invoice' };
       var h = [];
       h.push('<p class="hint" style="margin:0 0 10px">Email invoices (PDF or photo) to <b>accounts@st-helens.ie</b>, or upload one here. Enter the details once, then match the payment that paid it.</p>');
-      h.push('<p><button data-iact="upload">+ Upload an invoice</button><input type="file" id="inv-file" accept="application/pdf,image/*" hidden></p>');
+      h.push('<p><button data-iact="upload">+ Upload an invoice</button><input type="file" id="inv-file" accept="application/pdf,image/*" hidden>' +
+        (invs.length ? ' <span class="hint" style="margin-left:8px">Click an invoice to open or close it · <button class="link" data-iact="openall">Open all</button> · <button class="link" data-iact="closeall">Close all</button></span>' : '') + '</p>');
       // Known suppliers for the Supplier box (type a new one, or pick one the Desk already knows).
       var names = {};
       (m.suppliers || []).concat((m.invoices || []).map(function (x) { return x.supplier; })).forEach(function (n) { if (n) names[n] = true; });
@@ -1751,7 +1752,7 @@
         list.forEach(function (i) { h.push(invoiceItemHtml(m, i, invState(i), label, openByDefault)); });
         h.push('</div>');
       };
-      section('To check or enter', groups.enter, true);
+      section('To check or enter', groups.enter, false);
       section('Not fully paid', groups.unpaid.concat(groups.part), false);
       section('Paid by a director, to reimburse', groups.reimb, false);
       // One box per director: what they're owed, and recording the bank payment that pays them back.
@@ -1795,7 +1796,7 @@
     function invoiceItemHtml(m, i, st, label, openByDefault) {
       var due = i.total != null ? Math.round((i.total - (i.paid || 0)) * 100) / 100 : null;
       var stText = st === 'part' ? 'Part paid · ' + eur(due, true) + ' due' : (st === 'enter' && i.status === 'To check' ? 'To check'
-        : st === 'paid' && i.paidBy ? 'Reimbursed' : label[st]);
+        : st === 'paid' && i.paidBy ? 'Reimbursed' : st === 'paid' && i.closed ? 'Closed' : st === 'paid' && due < -0.009 ? 'Overpaid' : label[st]);
       var dirs = (m.directors || []).slice();
       if (i.paidBy && dirs.indexOf(i.paidBy) === -1) dirs.push(i.paidBy);
       var checking = st === 'enter' && i.status === 'To check';
@@ -1827,7 +1828,9 @@
           (checking ? '<button class="primary" data-iact="save" data-confirm="1" data-id="' + escapeHtml(i.id) + '">Looks right</button>'
             : '<button class="primary" data-iact="save" data-id="' + escapeHtml(i.id) + '" data-needs-change="1" disabled>' + (st === 'enter' ? 'Save details' : 'Save changes') + '</button>') +
           (st === 'enter' ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">Try reading it again</button>' : '') +
-          (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') + '</div>';
+          (st === 'ignored' ? '<button data-iact="reread" data-id="' + escapeHtml(i.id) + '">It is an invoice: read it again</button>' : '') +
+          (st === 'ignored' ? '' : '<button class="link" data-iact="ignore" data-id="' + escapeHtml(i.id) + '">Not an invoice</button>') +
+          '<button class="link" data-iact="del" data-id="' + escapeHtml(i.id) + '" style="margin-left:auto">Delete</button></div>';
       if (i.history && i.history.length) {
         body += '<details style="margin-top:6px"><summary class="hint">History (' + i.history.length + ')</summary>' + i.history.map(function (e) {
           return '<p class="hint" style="margin:2px 0">' + escapeHtml(e.when) + ' · ' + escapeHtml(e.who) + ' · ' + escapeHtml(e.text) + '</p>';
@@ -1865,7 +1868,15 @@
            : 'No payment of ' + eur(i.total, true) + ' in the bank statements yet (around the invoice date).') + '</div>';
       }
       var h = '';
-      if (st === 'paid') h = '<div class="inv-paybox ok"><b>✓ Paid in full and matched to the bank</b>';
+      if (i.closed) {   // what was still owed has been closed off, with a reason
+        h = '<div class="inv-paybox ok"><b>✓ Closed off: ' + escapeHtml(i.closed) + '</b>' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) + ' paid' +
+          (due > 0.009 ? ' · ' + eur(due, true) + ' not paid' : '') + ' <button class="link" data-iact="reopen" data-id="' + escapeHtml(i.id) + '">reopen</button>';
+        (i.payments || []).forEach(function (t) {
+          h += '<div class="inv-pay">Matched: ' + line(t) + ' <button class="link" data-iact="unmatch" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">unmatch</button></div>';
+        });
+        return h + '</div>';
+      }
+      if (st === 'paid') h = '<div class="inv-paybox ok"><b>✓ Paid in full and matched to the bank' + (due < -0.009 ? ' · overpaid by ' + eur(-due, true) : '') + '</b>';
       else if (st === 'part') h = '<div class="inv-paybox warn"><b>Part paid: ' + eur(i.paid || 0, true) + ' of ' + eur(i.total, true) + ' matched · <span class="neg">' + eur(due, true) + ' still to pay</span></b>';
       else h = '<div class="inv-paybox warn"><b>Not paid yet: no bank payment matched</b>';
       (i.payments || []).forEach(function (t) {
@@ -1877,17 +1888,29 @@
           h += '<div class="inv-pay inv-sugg">Looks like a match: ' + line(t) +
             ' <button data-iact="match" data-id="' + escapeHtml(i.id) + '" data-t="' + escapeHtml(t.id) + '">Match</button></div>';
         });
-        // Other payments that could plausibly cover what's still owed: no bigger than it, around or after the invoice date.
-        var fits = after.filter(function (t) { return -t.amount <= due + 0.01 && sugg.indexOf(t) === -1; });
+        // Any other unmatched payment from around the invoice date onwards (no upper limit: an annual invoice can be
+        // paid monthly all year). Payments to the same payee as ones already matched come first.
+        var later = i.date ? un.filter(function (t) { return t.date >= addDaysIso(i.date, -14); }) : un;
+        var payees = (i.payments || []).map(function (t) { return t.details; });
+        var fits = later.filter(function (t) { return sugg.indexOf(t) === -1; }).sort(function (a, b) {
+          var pa = payees.indexOf(a.details) !== -1 ? 0 : 1, pb = payees.indexOf(b.details) !== -1 ? 0 : 1;
+          return pa - pb || a.date.localeCompare(b.date);
+        }).slice(0, 150);
         if (fits.length) {
           h += '<p style="margin:4px 0 0"><button class="link" data-iact="more" data-id="' + escapeHtml(i.id) + '">Match another payment…</button></p>' +
-            '<div class="inv-pay" data-more="' + escapeHtml(i.id) + '" hidden><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Choose a payment (up to ' + eur(due, true) + ')</option>' +
-            fits.slice().sort(function (a, b) { return a.date.localeCompare(b.date); }).map(function (t) {
-              return '<option value="' + escapeHtml(t.id) + '">' + line(t) + '</option>';
+            '<div class="inv-pay" data-more="' + escapeHtml(i.id) + '" hidden><select data-ipick="' + escapeHtml(i.id) + '"><option value="">Choose a payment (' + eur(due, true) + ' still due)</option>' +
+            fits.map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '">' + line(t) + (-t.amount > due + 0.01 ? ' (more than what’s still due)' : '') + '</option>';
             }).join('') + '</select><button data-iact="matchpick" data-id="' + escapeHtml(i.id) + '">Match</button></div>';
         } else if (!sugg.length) {
           h += '<p class="hint" style="margin:4px 0 0">No unmatched payment in the bank statements fits this yet.</p>';
         }
+        // Close off what's still owed (e.g. a later invoice replaced this one, or a credit note came).
+        h += '<p style="margin:4px 0 0"><button class="link" data-iact="closeoff" data-id="' + escapeHtml(i.id) + '">Close off what’s still owed…</button></p>' +
+          '<div class="inv-pay" data-close="' + escapeHtml(i.id) + '" hidden><select data-creason="' + escapeHtml(i.id) + '">' +
+          ['Superseded by a later invoice', 'Credit note received', 'Agreed not to pay the rest', 'Other'].map(function (r) { return '<option>' + r + '</option>'; }).join('') +
+          '</select> <input data-cnote="' + escapeHtml(i.id) + '" maxlength="200" placeholder="Note (e.g. fee went up from July)" style="min-width:220px;padding:5px;font:inherit;font-size:13px"> ' +
+          '<button data-iact="closego" data-id="' + escapeHtml(i.id) + '">Close off ' + eur(due, true) + '</button></div>';
       }
       return h + '</div>';
     }
@@ -1938,9 +1961,9 @@
         var inv = { id: id, status: act === 'ignore' ? 'Not an invoice' : 'Entered', confirm: !!b.getAttribute('data-confirm') };
         form.querySelectorAll('[data-f]').forEach(function (f) { inv[f.getAttribute('data-f')] = f.value.trim(); });
         if (act === 'save' && (!inv.supplier || (!inv.total && !inv.net))) { showStatus('Fill in at least the supplier and the total.'); return; }
-        invOpen[id] = true;
         call('saveInvoice', [inv, moneyYear], { button: b, label: b.textContent, working: 'Saving…', done: act === 'ignore' ? 'Set aside.' : 'Saved.',
           onSuccess: function (m) {
+            invOpen[id] = false;   // done with it: close it so the list stays easy to move through
             renderMoney(m);
             var a = m.autoMatched || [];
             if (a.length) setTimeout(function () { showStatus('Saved, and matched to the payment ' + a.map(function (x) { return x.payment; }).join('; ') + '.'); }, 50);
@@ -1963,6 +1986,25 @@
         call('recordReimbursement', [rsel.value, rids, false, moneyYear], opts('Recording…', 'Reimbursement recorded.'));
       } else if (act === 'unreimb') {
         call('recordReimbursement', [b.getAttribute('data-t'), [], true, moneyYear], opts('Removing…', 'Reimbursement removed.'));
+      } else if (act === 'openall' || act === 'closeall') {
+        document.querySelectorAll('#money details.inv-item').forEach(function (d) { d.open = act === 'openall'; invOpen[d.getAttribute('data-iid')] = d.open; });
+      } else if (act === 'closeoff') {
+        var cbox = document.querySelector('[data-close="' + id + '"]'); if (cbox) cbox.hidden = !cbox.hidden;
+      } else if (act === 'closego') {
+        var why = document.querySelector('select[data-creason="' + id + '"]').value, note = document.querySelector('input[data-cnote="' + id + '"]').value.trim();
+        if (why === 'Other' && !note) { showStatus('Add a note saying why.'); return; }
+        call('closeInvoice', [id, why === 'Other' ? note : why + (note ? ': ' + note : ''), false, moneyYear], opts('Closing off…', 'Closed off.'));
+      } else if (act === 'reopen') {
+        call('closeInvoice', [id, '', true, moneyYear], opts('Reopening…', 'Reopened.'));
+      } else if (act === 'del') {
+        // Two clicks: the first arms the button for a few seconds.
+        if (!b.getAttribute('data-armed')) {
+          b.setAttribute('data-armed', '1'); b.textContent = 'Click again to delete (the file goes to the Drive bin)';
+          setTimeout(function () { b.removeAttribute('data-armed'); b.textContent = 'Delete'; }, 5000);
+          return;
+        }
+        delete invOpen[id];
+        call('deleteInvoice', [id, moneyYear], opts('Deleting…', 'Deleted.'));
       }
     });
 
