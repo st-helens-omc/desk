@@ -1536,11 +1536,17 @@
         var psel = plans.length && t.amount < 0 ? '<label>Plan item <select data-mact="plan"><option value="">— none —</option>' + plans.map(function (p) {
           return '<option value="' + escapeHtml(p.id) + '"' + (p.id === t.plan ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>';
         }).join('') + '</select></label>' : '';
-        act = '<div class="act" hidden>' + sel + psel + '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
+        // Which account it really belongs to: a payment out can be charged to the other account.
+        var other = t.account === 'Current account' ? 'Sinking fund' : 'Current account';
+        var csel = t.amount < 0 ? '<label>Paid for by <select data-mact="charge"' + (t.settledBy ? ' disabled title="Already squared up by a transfer"' : '') + '>' +
+          '<option value="">the ' + escapeHtml(t.account.toLowerCase()) + ' (where it was paid from)</option>' +
+          '<option value="' + other + '"' + (t.chargedTo === other ? ' selected' : '') + '>the ' + other.toLowerCase() + ' (it owes it back)</option></select></label>' : '';
+        act = '<div class="act" hidden>' + sel + psel + csel + '<button data-mact="save" data-id="' + escapeHtml(t.id) + '">Save</button></div>';
       }
+      var charged = t.chargedTo ? ' <span class="hint">· charged to the ' + escapeHtml(t.chargedTo.toLowerCase()) + (t.settledBy ? ', squared up' : '') + '</span>' : '';
       return '<div class="mny-line" data-id="' + escapeHtml(t.id) + '">' +
         '<span>' + escapeHtml(fmtDay(t.date)) + '</span>' +
-        '<span class="det" title="' + escapeHtml(t.details) + '">' + escapeHtml(t.details) +
+        '<span class="det" title="' + escapeHtml(t.details) + '">' + escapeHtml(t.details) + charged +
           (opts.change ? ' <button class="link mny-change" data-mact="change">change</button>' : '') + '</span>' +
         '<span class="num' + (t.amount > 0 ? ' in' : '') + '">' + eur(t.amount, true) + '</span>' + act + '</div>';
     }
@@ -1559,8 +1565,18 @@
       var curTx = m.txns.filter(function (t) { return t.account === 'Current account'; });
       var sinkTx = m.txns.filter(function (t) { return t.account === 'Sinking fund'; });
       var toSort = m.txns.filter(function (t) { return !t.category; });
+      // What each account really paid for: payments charged to the other account move across.
+      var costTx = curTx.filter(function (t) { return t.chargedTo !== 'Sinking fund'; })
+        .concat(sinkTx.filter(function (t) { return t.chargedTo === 'Current account'; }));
+      var fundTx = sinkTx.filter(function (t) { return t.chargedTo !== 'Current account'; })
+        .concat(curTx.filter(function (t) { return t.chargedTo === 'Sinking fund'; }));
+      // Owed between the accounts (any year): charged payments not yet squared up by a transfer.
+      var owedRows = (m.charges || []).filter(function (c) { return !c.settledBy; });
+      var sinkOwes = owedRows.filter(function (c) { return c.chargedTo === 'Sinking fund'; }).reduce(function (a, c) { return a - c.amount; }, 0);
+      var curOwes = owedRows.filter(function (c) { return c.chargedTo === 'Current account'; }).reduce(function (a, c) { return a - c.amount; }, 0);
+      var sinkAfter = (sink.balance || 0) - sinkOwes + curOwes;
       var spentBy = {}, linesBy = {};
-      curTx.forEach(function (t) {
+      costTx.forEach(function (t) {
         if (!t.category) return;
         spentBy[t.category] = (spentBy[t.category] || 0) - t.amount;
         (linesBy[t.category] = linesBy[t.category] || []).push(t);
@@ -1578,7 +1594,7 @@
       });
       var income = -(spentBy['Service charges'] || 0) - (spentBy['Other income'] || 0);
       var incomeLines = (linesBy['Service charges'] || []).concat(linesBy['Other income'] || []);
-      var unsortedOut = curTx.filter(function (t) { return !t.category && t.amount < 0; })
+      var unsortedOut = costTx.filter(function (t) { return !t.category && t.amount < 0; })
         .reduce(function (a, t) { return a - t.amount; }, 0);
 
       var tab = MONEY_TABS.indexOf(moneyTab) === -1 ? 'overview' : moneyTab;
@@ -1594,7 +1610,7 @@
       var toEnter = invoices.filter(function (i) { return invState(i) === 'enter'; });
       var owing = invoices.filter(function (i) { var st = invState(i); return st === 'unpaid' || st === 'part'; });
       var owingTotal = owing.reduce(function (a, i) { return a + (i.total - (i.paid || 0)); }, 0);
-      var pt = planTotals(m, sink.balance || 0);
+      var pt = planTotals(m, sinkAfter);
 
       // Sub-tab buttons
       var nav = '<nav class="mny-tabs">' + [
@@ -1612,7 +1628,8 @@
         h.push('<div class="mny-card"><div class="lbl">Current account</div><div class="big">' + (cur.balance === null ? '—' : eur(cur.balance)) +
           '</div><div class="sub">' + (cur.asOf ? 'at ' + escapeHtml(fmtDay(cur.asOf)) : 'no statements yet') + '</div></div>');
         h.push('<div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
-          '</div><div class="sub">' + (sink.asOf ? (asOf && sink.asOf < asOf ? 'statement to ' + escapeHtml(fmtDay(asOf)) + ' · no change since ' + escapeHtml(fmtDay(sink.asOf)) : 'at ' + escapeHtml(fmtDay(sink.asOf))) : 'no statements yet') + '</div></div>');
+          '</div><div class="sub">' + (sink.asOf ? (asOf && sink.asOf < asOf ? 'statement to ' + escapeHtml(fmtDay(asOf)) + ' · no change since ' + escapeHtml(fmtDay(sink.asOf)) : 'at ' + escapeHtml(fmtDay(sink.asOf))) : 'no statements yet') +
+          (sinkOwes > 0.009 ? '<br>owes the current account ' + eur(sinkOwes, true) : '') + (curOwes > 0.009 ? '<br>is owed ' + eur(curOwes, true) + ' by the current account' : '') + '</div></div>');
         var pctSpent = budgetTotal ? Math.round(spentTotal / budgetTotal * 100) : 0;
         h.push('<div class="mny-card"><div class="lbl">Spent in ' + m.year + '</div><div class="big">' + eur(spentTotal) +
           '</div><div class="sub">' + pctSpent + '% of the ' + eur(budgetTotal) + ' budget' +
@@ -1637,6 +1654,8 @@
         if (toCheck) att.push(['invoices', toCheck + ' invoice' + (toCheck === 1 ? '' : 's') + ' read automatically, to check']);
         if (toType) att.push(['invoices', toType + ' invoice' + (toType === 1 ? '' : 's') + ' to enter by hand']);
         if (owing.length) att.push(['invoices', owing.length + ' invoice' + (owing.length === 1 ? '' : 's') + ' not fully paid (' + eur(owingTotal, true) + ' outstanding)']);
+        if (sinkOwes > 0.009) att.push(['fund', 'The sinking fund owes the current account ' + eur(sinkOwes, true) + ' for payments made from the current account; transfer it and record it']);
+        if (curOwes > 0.009) att.push(['fund', 'The current account owes the sinking fund ' + eur(curOwes, true) + ' for payments made from the sinking fund; transfer it and record it']);
         var owedDir = {};
         invoices.filter(function (i) { return invState(i) === 'reimb'; }).forEach(function (i) { owedDir[i.paidBy] = (owedDir[i.paidBy] || 0) + i.total; });
         Object.keys(owedDir).sort().forEach(function (n) { att.push(['invoices', 'Owed to ' + escapeHtml(n) + ' for invoices paid personally (' + eur(owedDir[n], true) + ')']); });
@@ -1673,18 +1692,21 @@
           '<div class="mny-lines">' + incomeLines.slice().reverse().map(function (t) { return moneyLineHtml(t, { change: true }); }).join('') + '</div></details></div>');
       } else if (tab === 'fund') {
         var sinkIn = sinkTx.filter(function (t) { return t.amount > 0; }).reduce(function (a, t) { return a + t.amount; }, 0);
-        var sinkOut = sinkTx.filter(function (t) { return t.amount < 0; }).reduce(function (a, t) { return a - t.amount; }, 0);
+        var sinkOut = fundTx.filter(function (t) { return t.amount < 0 && !/^Transfer/.test(t.category || ''); }).reduce(function (a, t) { return a - t.amount; }, 0);
         h.push('<div class="mny-cards"><div class="mny-card"><div class="lbl">Sinking fund</div><div class="big">' + (sink.balance === null ? '—' : eur(sink.balance)) +
-          '</div><div class="sub">statement to ' + escapeHtml(fmtDay(asOf)) + '</div></div>' +
+          '</div><div class="sub">statement to ' + escapeHtml(fmtDay(asOf)) +
+          (sinkOwes > 0.009 || curOwes > 0.009 ? '<br>' + eur(sinkAfter) + ' once squared up with the current account' : '') + '</div></div>' +
           '<div class="mny-card"><div class="lbl">In ' + m.year + '</div><div class="big">' + eur(sinkIn) + '</div><div class="sub">transfers and interest</div></div>' +
           '<div class="mny-card"><div class="lbl">Out ' + m.year + '</div><div class="big">' + eur(sinkOut) + '</div><div class="sub">works paid from the fund</div></div></div>');
         h.push('<div class="mny-table" style="margin-top:10px"><details class="mny-cat" data-cat="__sink"' + (moneyOpen.__sink ? ' open' : '') + '><summary class="mny-row">' +
           '<span class="name">Sinking fund payments in ' + m.year + '</span><span class="num"></span><span class="num">' + eur(sinkIn - sinkOut) + '</span><span class="barcell"></span></summary>' +
-          '<div class="mny-lines">' + sinkTx.slice().reverse().map(function (t) {
+          '<div class="mny-lines">' + sinkTx.concat(curTx.filter(function (t) { return t.chargedTo === 'Sinking fund'; }))
+            .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).reverse().map(function (t) {
             var p = t.plan && (m.plan || []).filter(function (x) { return x.id === t.plan; })[0];
             return moneyLineHtml(t, { change: true }).replace('</span><span class="num', ' <span class="hint">· ' + escapeHtml(p ? p.name : (t.category || 'to sort')) + '</span></span><span class="num');
           }).join('') + '</div></details></div>');
-        h.push(planHtml(m, sink));
+        h.push(squareUpHtml(m));
+        h.push(planHtml(m, { balance: sinkAfter }));
       } else {
         h.push(invoicesHtml(m, invState));
       }
@@ -1930,6 +1952,12 @@
       var btn = document.querySelector('button[data-iact="save"][data-needs-change][data-id="' + form.getAttribute('data-id') + '"]');
       if (btn) btn.disabled = !changed;
     });
+    // Charging a current-account payment to the sinking fund makes it major works, not a running cost.
+    document.getElementById('money').addEventListener('change', function (ev) {
+      if (!ev.target.matches || !ev.target.matches('select[data-mact="charge"]') || ev.target.value !== 'Sinking fund') return;
+      var cat = ev.target.closest('.act').querySelector('select[data-mact="cat"]');
+      if (cat && [].some.call(cat.options, function (o) { return o.value === 'Major works (sinking fund)'; })) cat.value = 'Major works (sinking fund)';
+    });
     document.getElementById('money').addEventListener('change', function (ev) {
       if (ev.target.id !== 'inv-file') return;
       var file = ev.target.files && ev.target.files[0];
@@ -1986,6 +2014,15 @@
         call('recordReimbursement', [rsel.value, rids, false, moneyYear], opts('Recording…', 'Reimbursement recorded.'));
       } else if (act === 'unreimb') {
         call('recordReimbursement', [b.getAttribute('data-t'), [], true, moneyYear], opts('Removing…', 'Reimbursement removed.'));
+      } else if (act === 'squareup') {
+        var qbox = b.closest('.inv-reimb');
+        var qids = Array.prototype.filter.call(qbox.querySelectorAll('input[data-sq]'), function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-sq'); });
+        var qsel = qbox.querySelector('select[data-sqpick]');
+        if (!qids.length) { showStatus('Tick at least one payment.'); return; }
+        if (!qsel.value) { showStatus('Choose the transfer first.'); return; }
+        call('settleCharges', [qsel.value, qids, false, moneyYear], opts('Recording…', 'Recorded.'));
+      } else if (act === 'unsquare') {
+        call('settleCharges', [b.getAttribute('data-t'), [], true, moneyYear], opts('Removing…', 'Removed.'));
       } else if (act === 'openall' || act === 'closeall') {
         document.querySelectorAll('#money details.inv-item').forEach(function (d) { d.open = act === 'openall'; invOpen[d.getAttribute('data-iid')] = d.open; });
       } else if (act === 'closeoff') {
@@ -2023,6 +2060,37 @@
                committedCount: committed.length, committedNoPrice: noEst(committed) };
     }
     function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+    // "Owed between the accounts": payments charged to the other account, and squaring them up with a transfer.
+    function squareUpHtml(m) {
+      var charges = m.charges || [];
+      if (!charges.length) return '';
+      var line = function (t) { return escapeHtml(fmtDay(t.date)) + ' · ' + escapeHtml(t.details) + ' · ' + eur(-t.amount, true); };
+      var h = ['<h2>Owed between the accounts</h2>'];
+      [['Sinking fund', 'Current account'], ['Current account', 'Sinking fund']].forEach(function (pair) {
+        var owes = pair[0], to = pair[1];
+        var open = charges.filter(function (c) { return c.chargedTo === owes && !c.settledBy; });
+        if (!open.length) return;
+        var tot = Math.round(open.reduce(function (a, c) { return a - c.amount; }, 0) * 100) / 100;
+        var outs = (m.outLines || {})[owes] || [];
+        var exact = outs.filter(function (t) { return Math.abs(-t.amount - tot) < 0.01; });
+        outs = exact.concat(outs.filter(function (t) { return exact.indexOf(t) === -1; }));
+        h.push('<div class="inv-reimb" data-owes="' + escapeHtml(owes) + '"><b>The ' + escapeHtml(owes.toLowerCase()) + ' owes the ' + escapeHtml(to.toLowerCase()) + ' ' + eur(tot, true) + '</b>' +
+          ' <span class="hint">(' + plural(open.length, 'payment') + ' made from the ' + escapeHtml(to.toLowerCase()) + ')</span>' +
+          '<p class="hint" style="margin:4px 0">Transfer it in the bank. When the transfer shows in the statements, tick the payments it covers and choose it here.</p>' +
+          open.map(function (c) { return '<label><input type="checkbox" data-sq="' + escapeHtml(c.id) + '" checked> ' + line(c) + '</label>'; }).join('') +
+          '<select data-sqpick><option value="">Choose the transfer out of the ' + escapeHtml(owes.toLowerCase()) + '</option>' + outs.map(function (t) {
+            return '<option value="' + escapeHtml(t.id) + '">' + line(t) + (exact.indexOf(t) !== -1 ? ' (same amount)' : '') + '</option>';
+          }).join('') + '</select><button data-iact="squareup">Record the transfer</button></div>');
+      });
+      var done = charges.filter(function (c) { return c.settledBy; });
+      if (done.length) {
+        h.push('<details class="hint" style="margin:4px 0 12px"><summary>Squared up (' + done.length + ')</summary>' + done.map(function (c) {
+          return '<p style="margin:2px 0">' + line(c) + ' · charged to the ' + escapeHtml(c.chargedTo.toLowerCase()) + ' · squared up by ' +
+            (c.settlement ? line(c.settlement) : 'a transfer') + ' <button class="link" data-iact="unsquare" data-t="' + escapeHtml(c.settledBy) + '">remove</button></p>';
+        }).join('') + '</details>');
+      }
+      return h.join('');
+    }
     function planHtml(m, sink) {
       var items = m.plan || [];
       var bal = sink.balance || 0;
@@ -2158,7 +2226,8 @@
         if (!sel.value) { showStatus('Choose a category first.'); sel.focus(); return; }
         var rem = line.querySelector('input[data-mact="remember"]');
         var psel = line.querySelector('select[data-mact="plan"]');
-        call('setMoneyCategory', [b.getAttribute('data-id'), sel.value, !!(rem && rem.checked), moneyYear, psel ? psel.value : null],
+        var csel = line.querySelector('select[data-mact="charge"]');
+        call('setMoneyCategory', [b.getAttribute('data-id'), sel.value, !!(rem && rem.checked), moneyYear, psel ? psel.value : null, csel && !csel.disabled ? csel.value : null],
           { button: b, label: b.textContent, working: 'Saving…', done: 'Sorted.', onSuccess: renderMoney });
       } else if (act === 'import') {
         call('importMoneyNow', [moneyYear], { button: b, label: b.textContent, working: 'Checking accounts@ for statements…', done: 'Checked.',
