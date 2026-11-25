@@ -400,6 +400,14 @@
     .inv-st.unpaid, .inv-st.part { background: var(--red-soft); color: var(--red); }
     .inv-st.paid { background: var(--accent-soft); color: var(--accent); }
     .inv-st.reimb { background: var(--amber-soft); color: var(--amber); }
+    #links { max-width: 900px; }
+    .link-form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0 16px; }
+    .link-form label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+    .link-form input { padding: 6px 8px; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; }
+    #link-url { width: 300px; } #link-note { width: 200px; }
+    .link-row { display: grid; grid-template-columns: minmax(180px, 1.1fr) 2fr auto; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: baseline; font-size: 14px; }
+    .link-row .tgt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    @media (max-width: 640px) { .link-row { grid-template-columns: 1fr; gap: 2px; } #link-url, #link-note { width: 100%; } }
     .inv-reimb { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0 14px; background: #fbf3e4; }
     .inv-reimb label { display: block; margin: 2px 0; font-size: 13px; }
     .inv-reimb select { max-width: 100%; margin: 6px 6px 0 0; padding: 5px; font: inherit; font-size: 13px; }
@@ -546,6 +554,7 @@
     <button id="view-tasks" class="on" onclick="showView('tasks')">Tasks</button>
     <button id="view-messages" onclick="showView('messages')">Messages <span class="badge" id="msg-badge" hidden></span></button>
     <button id="view-money" onclick="showView('money')">Money</button>
+    <button id="view-links" onclick="showView('links')">Links</button>
   </nav>
 
   <!-- Sign-in screen (shown when this browser isn't signed in yet) -->
@@ -713,6 +722,19 @@
   <div id="messages" hidden>
     <p class="msg-intro">Messages to the residents' groups go out from the St Helens admin account as <b>The Directors, St Helens OMC</b>, and replies come back to all the directors. Announcements and Owners need another director's approval. Every message waits a few minutes after it's released, so anyone can still cancel it, and the directors get a copy.</p>
     <div id="msg-lists"><p class="msg-empty">Loading…</p></div>
+  </div>
+
+  <!-- Short links: st-helens.ie/<name> goes to whatever is set here -->
+  <div id="links" hidden>
+    <h2 style="margin-top:4px">Short links</h2>
+    <p class="hint">A short address like <b>st-helens.ie/tender-photos</b> that goes to any web page, Drive folder or document. Anyone with a short link can follow it, so use names that aren’t easy to guess for anything private (Drive’s own sharing still applies).</p>
+    <form id="link-form" class="link-form" autocomplete="off">
+      <label>st-helens.ie/<input id="link-name" placeholder="tender-photos" maxlength="60" required></label>
+      <label>goes to <input id="link-url" placeholder="https://drive.google.com/…" required></label>
+      <label>note <input id="link-note" placeholder="what it is (optional)" maxlength="200"></label>
+      <button class="primary" id="link-save">Add link</button> <button type="button" class="link" id="link-cancel" hidden>cancel</button>
+    </form>
+    <div id="links-body"><p class="hint">Loading…</p></div>
   </div>
 
   <div id="money" hidden>
@@ -1495,12 +1517,77 @@
       document.getElementById('money').hidden = v !== 'money';
       document.getElementById('view-money').classList.toggle('on', v === 'money');
       if (v === 'money') loadMoney();
+      document.getElementById('links').hidden = v !== 'links';
+      document.getElementById('view-links').classList.toggle('on', v === 'links');
+      if (v === 'links') loadLinks();
       document.getElementById('add-btn').hidden = v !== 'tasks';
       document.getElementById('new-msg-btn').hidden = v !== 'messages';
       document.getElementById('view-tasks').classList.toggle('on', v === 'tasks');
       document.getElementById('view-messages').classList.toggle('on', v === 'messages');
       if (v === 'messages') loadMessages();
     }
+
+    // ---- Short links (st-helens.ie/<name>) ----
+    var links = null, linkEditing = null;
+    function loadLinks() {
+      google.script.run.withSuccessHandler(renderLinks)
+        .withFailureHandler(function (e) { document.getElementById('links-body').innerHTML = '<p class="hint">' + escapeHtml(e.message || 'Couldn’t load the links.') + '</p>'; })
+        .getLinks(KEY);
+    }
+    function renderLinks(list) {
+      links = list || [];
+      var el = document.getElementById('links-body');
+      if (!links.length) { el.innerHTML = '<p class="hint">No short links yet. Add one above.</p>'; return; }
+      el.innerHTML = links.map(function (l) {
+        var short = 'st-helens.ie/' + l.name;
+        return '<div class="link-row"><span><a href="https://' + short + '" target="_blank" rel="noopener"><b>' + escapeHtml(short) + '</b></a>' +
+          (l.note ? '<br><span class="hint">' + escapeHtml(l.note) + '</span>' : '') + '</span>' +
+          '<span class="tgt"><a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="' + escapeHtml(l.url) + '">' + escapeHtml(l.url) + '</a>' +
+          '<br><span class="hint">' + (l.uses ? plural(l.uses, 'visit') + ' · ' : '') + 'by ' + escapeHtml(l.updatedBy) + (l.updatedAt ? ', ' + escapeHtml(fmtDay(l.updatedAt)) : '') + '</span></span>' +
+          '<span style="white-space:nowrap"><button class="link" data-lact="copy" data-n="' + escapeHtml(l.name) + '">copy</button> · ' +
+          '<button class="link" data-lact="edit" data-n="' + escapeHtml(l.name) + '">edit</button> · ' +
+          '<button class="link" data-lact="del" data-n="' + escapeHtml(l.name) + '">delete</button></span></div>';
+      }).join('');
+    }
+    function resetLinkForm() {
+      linkEditing = null;
+      ['link-name', 'link-url', 'link-note'].forEach(function (id) { document.getElementById(id).value = ''; });
+      document.getElementById('link-save').textContent = 'Add link';
+      document.getElementById('link-cancel').hidden = true;
+    }
+    document.getElementById('link-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var b = document.getElementById('link-save');
+      var l = { name: document.getElementById('link-name').value.trim().toLowerCase(), url: document.getElementById('link-url').value.trim(),
+                note: document.getElementById('link-note').value.trim() };
+      call('saveLink', [l, linkEditing], { button: b, label: b.textContent, working: 'Saving…', done: 'Saved: st-helens.ie/' + l.name,
+        onSuccess: function (list) { resetLinkForm(); renderLinks(list); } });
+    });
+    document.getElementById('link-cancel').addEventListener('click', resetLinkForm);
+    document.getElementById('links-body').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-lact]'); if (!b) return;
+      var n = b.getAttribute('data-n'), act = b.getAttribute('data-lact');
+      var l = (links || []).filter(function (x) { return x.name === n; })[0];
+      if (act === 'copy') {
+        var txt = 'https://st-helens.ie/' + n;
+        (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { showStatus('Copied ' + txt); }, function () { showStatus(txt); });
+      } else if (act === 'edit' && l) {
+        linkEditing = l.name;
+        document.getElementById('link-name').value = l.name;
+        document.getElementById('link-url').value = l.url;
+        document.getElementById('link-note').value = l.note;
+        document.getElementById('link-save').textContent = 'Save changes';
+        document.getElementById('link-cancel').hidden = false;
+        document.getElementById('link-name').focus();
+      } else if (act === 'del') {
+        if (!b.getAttribute('data-armed')) {
+          b.setAttribute('data-armed', '1'); b.textContent = 'click again to delete';
+          setTimeout(function () { b.removeAttribute('data-armed'); b.textContent = 'delete'; }, 5000);
+          return;
+        }
+        call('deleteLink', [n], { button: b, label: 'delete', working: 'Deleting…', done: 'Deleted.', onSuccess: renderLinks });
+      }
+    });
 
     // ---- Money ----
     // Bank statements emailed to accounts@ are loaded into the Desk; lines are sorted into the
@@ -2793,6 +2880,8 @@
       document.getElementById('views').hidden = true;
       document.getElementById('messages').hidden = true;
       document.getElementById('new-msg-btn').hidden = true;
+      document.getElementById('money').hidden = true;
+      document.getElementById('links').hidden = true;
     }
     function showPick() {
       showOnly('signin-pick');
@@ -2858,7 +2947,7 @@
       loadTasks();
       loadDigest();
       loadMessages();
-      showView(OPEN_VIEW === 'messages' || OPEN_VIEW === 'money' ? OPEN_VIEW : 'tasks');
+      showView(OPEN_VIEW === 'messages' || OPEN_VIEW === 'money' || OPEN_VIEW === 'links' ? OPEN_VIEW : 'tasks');
       if (OPEN_ADD) {
         OPEN_ADD = false;  // only once, not after every sign-in
         try { google.script.history.replace(null, {}, ''); } catch (e) {}
